@@ -40,7 +40,7 @@ export default function Home() {
   const [rawRows, setRawRows] = useState(sample.map(w => [w.word, w.meaning!, w.example!, w.phrase!]));
   const [mapping, setMapping] = useState<Record<Field, number | null>>({ word: 0, meaning: 1, example: 2, phrase: 3 });
   const [visible, setVisible] = useState({ meaning: true, example: true, phrase: true });
-  const [mode, setMode] = useState<'cards' | 'draw'>('cards'); const [deck, setDeck] = useState(() => shuffle(sample));
+  const [mode, setMode] = useState<'cards' | 'draw'>('cards'); const [deck, setDeck] = useState(sample);
   const [index, setIndex] = useState(0); const [flipped, setFlipped] = useState(false); const [drawCount, setDrawCount] = useState(3);
   const [drawn, setDrawn] = useState(sample.slice(0, 3)); const [answers, setAnswers] = useState<Record<string, string>>({}); const [dragging, setDragging] = useState(false);
 
