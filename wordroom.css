@@ -48,6 +48,14 @@ header {
   padding: 7px 13px;
   font-weight: 600;
 }
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.export-btn {
+  white-space: nowrap;
+}
 .layout {
   max-width: 1380px;
   margin: auto;
@@ -230,6 +238,45 @@ input[type='number'] {
   position: relative;
   overflow: hidden;
 }
+.card-shell {
+  position: relative;
+}
+.star-btn {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border: 1px solid #d8d3c2;
+  border-radius: 999px;
+  background: #fff;
+  color: #8a8067;
+  font-size: 25px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    color 0.15s,
+    background 0.15s;
+}
+.star-btn:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.04);
+}
+.star-btn.active {
+  border-color: #d6ad35;
+  background: #fff7d8;
+  color: #c28a00;
+}
+.star-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.card-star {
+  position: absolute;
+  z-index: 2;
+  top: 22px;
+  right: 22px;
+}
 .card:before {
   content: '';
   position: absolute;
@@ -307,8 +354,15 @@ input[type='number'] {
   padding: 18px;
 }
 .item h3 {
-  margin: 0 0 14px;
+  margin: 0;
   font: 600 24px Georgia;
+}
+.item-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 .item textarea {
   width: 100%;
@@ -351,6 +405,17 @@ input[type='number'] {
   }
   .brand small {
     display: none;
+  }
+  header {
+    align-items: flex-start;
+  }
+  .header-actions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+  .export-btn {
+    padding: 8px 10px;
+    font-size: 13px;
   }
 }
 .sr-only {

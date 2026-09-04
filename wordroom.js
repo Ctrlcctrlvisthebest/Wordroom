@@ -8,36 +8,42 @@ export const LABELS = {
 };
 export const SAMPLE_WORDS = [
   {
+    sourceIndex: 0,
     word: 'serendipity',
     meaning: '意外发现美好事物的运气',
     example: 'We met by pure serendipity.',
     phrase: 'a stroke of serendipity',
   },
   {
+    sourceIndex: 1,
     word: 'resilient',
     meaning: '有韧性的；适应力强的',
     example: 'Children can be remarkably resilient.',
     phrase: 'resilient community',
   },
   {
+    sourceIndex: 2,
     word: 'eloquent',
     meaning: '雄辩的；有说服力的',
     example: 'She gave an eloquent speech.',
     phrase: 'eloquent testimony',
   },
   {
+    sourceIndex: 3,
     word: 'meticulous',
     meaning: '一丝不苟的；细致的',
     example: 'He kept meticulous records.',
     phrase: 'meticulous attention',
   },
   {
+    sourceIndex: 4,
     word: 'wanderlust',
     meaning: '旅行癖；漫游的渴望',
     example: 'The photos awakened her wanderlust.',
     phrase: 'satisfy your wanderlust',
   },
   {
+    sourceIndex: 5,
     word: 'pragmatic',
     meaning: '务实的；讲求实际的',
     example: 'We need a pragmatic solution.',
@@ -98,7 +104,8 @@ export function detectMapping(headers) {
 export function createWords(rows, mapping) {
   if (!Number.isInteger(mapping.word)) return [];
   return rows
-    .map((row) => ({
+    .map((row, sourceIndex) => ({
+      sourceIndex,
       word: String(row[mapping.word] ?? '').trim(),
       meaning:
         mapping.meaning == null
@@ -112,6 +119,31 @@ export function createWords(rows, mapping) {
         mapping.phrase == null ? '' : String(row[mapping.phrase] ?? '').trim(),
     }))
     .filter((item) => item.word);
+}
+
+export function serializeCSV(rows) {
+  return rows
+    .map((row) =>
+      row
+        .map((value) => {
+          const cell = String(value ?? '');
+          return /[",\r\n]/.test(cell)
+            ? `"${cell.replaceAll('"', '""')}"`
+            : cell;
+        })
+        .join(','),
+    )
+    .join('\r\n');
+}
+
+export function createStarredCSV(headers, rows, sourceIndices) {
+  const selectedRows = [...new Set(sourceIndices)]
+    .filter(
+      (index) => Number.isInteger(index) && index >= 0 && index < rows.length,
+    )
+    .sort((a, b) => a - b)
+    .map((index) => rows[index]);
+  return serializeCSV([headers, ...selectedRows]);
 }
 
 export function shuffled(items, random = Math.random) {
@@ -142,9 +174,14 @@ function startApp() {
   const state = {
     words: [...SAMPLE_WORDS],
     deck: shuffled(SAMPLE_WORDS),
+    drawn: shuffled(SAMPLE_WORDS).slice(0, 3),
+    starred: new Set(),
+    answers: new Map(),
     index: 0,
     flipped: false,
     headers: ['word', 'meaning', 'example', 'phrase'],
+    sourceHeaders: ['word', 'meaning', 'example', 'phrase'],
+    fileName: '示例词库.csv',
     rows: SAMPLE_WORDS.map((item) => [
       item.word,
       item.meaning,
@@ -159,8 +196,49 @@ function startApp() {
   const isIncluded = (field) =>
     field === 'word' || $(`[data-include="${field}"]`).checked;
 
+  function updateExportButton() {
+    const count = state.starred.size;
+    $('#exportBtn').disabled = count === 0;
+    $('#exportBtn').textContent = `↓ 导出星标（${count}）`;
+  }
+
+  function toggleStar(sourceIndex) {
+    if (state.starred.has(sourceIndex)) state.starred.delete(sourceIndex);
+    else state.starred.add(sourceIndex);
+    updateExportButton();
+    renderCard();
+    renderDraw();
+  }
+
+  function exportStarred() {
+    if (!state.starred.size) return;
+    const csv = createStarredCSV(
+      state.sourceHeaders,
+      state.rows,
+      state.starred,
+    );
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const baseName = state.fileName.replace(/\.csv$/i, '') || 'wordroom';
+    link.href = url;
+    link.download = `${baseName}-星标.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
   function rebuildDeck() {
     state.words = createWords(state.rows, state.mapping);
+    const validSourceIndices = new Set(
+      state.words.map((item) => item.sourceIndex),
+    );
+    state.starred = new Set(
+      [...state.starred].filter((sourceIndex) =>
+        validSourceIndices.has(sourceIndex),
+      ),
+    );
     state.deck = shuffled(state.words);
     state.index = 0;
     state.flipped = false;
@@ -168,7 +246,13 @@ function startApp() {
     $('#drawCount').max = Math.max(1, state.words.length);
     $('#drawCount').value =
       clampCount($('#drawCount').value, state.words.length) || 1;
+    state.drawn = shuffled(state.words).slice(
+      0,
+      clampCount($('#drawCount').value, state.words.length),
+    );
+    state.answers.clear();
     if (!state.words.length) showMessage('所选“单词”列中没有有效内容');
+    updateExportButton();
     renderCard();
     renderDraw();
   }
@@ -213,13 +297,26 @@ function startApp() {
     $('#prev').disabled = state.index <= 0;
     $('#next').disabled = state.index >= state.deck.length - 1;
     $('#flip').disabled = !current;
+    $('#cardStar').disabled = !current;
     if (!current) {
+      $('#cardStar').textContent = '☆';
+      $('#cardStar').classList.remove('active');
+      $('#cardStar').setAttribute('aria-pressed', 'false');
+      $('#cardStar').setAttribute('aria-label', '当前没有可星标的单词');
       $('#card').disabled = true;
       $('#card').innerHTML =
         '<span class="muted">请导入包含单词的 CSV 文件</span>';
       return;
     }
     $('#card').disabled = false;
+    const isStarred = state.starred.has(current.sourceIndex);
+    $('#cardStar').textContent = isStarred ? '★' : '☆';
+    $('#cardStar').classList.toggle('active', isStarred);
+    $('#cardStar').setAttribute('aria-pressed', String(isStarred));
+    $('#cardStar').setAttribute(
+      'aria-label',
+      `${isStarred ? '取消' : '给'} ${current.word} ${isStarred ? '的星标' : '加星标'}`,
+    );
     const fields = OPTIONAL_FIELDS.filter(
       (field) => state.mapping[field] != null && current[field],
     );
@@ -236,17 +333,32 @@ function startApp() {
   }
 
   function renderDraw() {
-    const count = clampCount($('#drawCount').value, state.words.length);
-    $('#drawCount').value = count || 1;
-    const picked = shuffled(state.words).slice(0, count);
-    $('#drawGrid').innerHTML = picked.length
-      ? picked
+    $('#drawGrid').innerHTML = state.drawn.length
+      ? state.drawn
           .map(
             (item, index) =>
-              `<article class="item"><h3>${String(index + 1).padStart(2, '0')}　${escapeHTML(item.word)}</h3><label class="sr-only" for="sentence-${index}">用 ${escapeHTML(item.word)} 写例句</label><textarea id="sentence-${index}" placeholder="用 ${escapeHTML(item.word)} 写一个例句…"></textarea></article>`,
+              `<article class="item"><div class="item-title"><h3>${String(index + 1).padStart(2, '0')}　${escapeHTML(item.word)}</h3><button class="star-btn ${state.starred.has(item.sourceIndex) ? 'active' : ''}" type="button" data-star="${item.sourceIndex}" aria-pressed="${state.starred.has(item.sourceIndex)}" aria-label="${state.starred.has(item.sourceIndex) ? '取消' : '给'} ${escapeHTML(item.word)} ${state.starred.has(item.sourceIndex) ? '的星标' : '加星标'}">${state.starred.has(item.sourceIndex) ? '★' : '☆'}</button></div><label class="sr-only" for="sentence-${index}">用 ${escapeHTML(item.word)} 写例句</label><textarea id="sentence-${index}" data-answer="${item.sourceIndex}" placeholder="用 ${escapeHTML(item.word)} 写一个例句…">${escapeHTML(state.answers.get(item.sourceIndex) || '')}</textarea></article>`,
           )
           .join('')
       : '<p class="muted">没有可抽取的单词</p>';
+    document.querySelectorAll('[data-star]').forEach((button) =>
+      button.addEventListener('click', () => {
+        toggleStar(Number(button.dataset.star));
+      }),
+    );
+    document.querySelectorAll('[data-answer]').forEach((textarea) =>
+      textarea.addEventListener('input', () => {
+        state.answers.set(Number(textarea.dataset.answer), textarea.value);
+      }),
+    );
+  }
+
+  function drawWords() {
+    const count = clampCount($('#drawCount').value, state.words.length);
+    $('#drawCount').value = count || 1;
+    state.drawn = shuffled(state.words).slice(0, count);
+    state.answers.clear();
+    renderDraw();
   }
 
   async function loadFile(file) {
@@ -259,15 +371,20 @@ function startApp() {
         throw new Error('请选择 .csv 文件');
       const parsed = parseCSV(await file.text());
       if (parsed.length < 2) throw new Error('CSV 至少需要一行列名和一行单词');
+      state.sourceHeaders = parsed[0];
       state.headers = parsed[0].map(
         (header, index) => header || `第 ${index + 1} 列`,
       );
       state.rows = parsed.slice(1);
+      state.fileName = file.name;
+      state.starred.clear();
+      state.answers.clear();
       state.mapping = detectMapping(state.headers);
       OPTIONAL_FIELDS.forEach((field) => {
         $(`[data-include="${field}"]`).checked = state.mapping[field] != null;
       });
       $('#filename').textContent = `✓ ${file.name}`;
+      updateExportButton();
       renderMapping();
       rebuildDeck();
     } catch (error) {
@@ -303,6 +420,11 @@ function startApp() {
   };
   $('#card').addEventListener('click', flip);
   $('#flip').addEventListener('click', flip);
+  $('#cardStar').addEventListener('click', () => {
+    const current = state.deck[state.index];
+    if (current) toggleStar(current.sourceIndex);
+  });
+  $('#exportBtn').addEventListener('click', exportStarred);
   $('#prev').addEventListener('click', () => {
     state.index = Math.max(0, state.index - 1);
     state.flipped = false;
@@ -357,10 +479,11 @@ function startApp() {
     $('#drawCount').value =
       clampCount($('#drawCount').value, state.words.length) || 1;
   });
-  $('#drawBtn').addEventListener('click', renderDraw);
+  $('#drawBtn').addEventListener('click', drawWords);
   renderMapping();
   renderCard();
   renderDraw();
+  updateExportButton();
 }
 
 if (typeof document !== 'undefined' && document.querySelector('#fileInput')) {

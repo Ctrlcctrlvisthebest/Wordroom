@@ -5,11 +5,13 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  Download,
   FileSpreadsheet,
   Layers3,
   RotateCcw,
   Shuffle,
   Sparkles,
+  Star,
   Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,6 +28,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   LABELS as labels,
   SAMPLE_WORDS as sample,
+  createStarredCSV,
   createWords,
   detectMapping,
   parseCSV,
@@ -33,11 +36,19 @@ import {
 } from '@/wordroom.js';
 import type { Field, Mapping, Word } from '@/wordroom.js';
 
+type WordInput = Omit<Word, 'sourceIndex'>;
+
 export default function WordroomClient() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [words, setWords] = useState<Word[]>(sample);
   const [fileName, setFileName] = useState('示例词库.csv');
   const [headers, setHeaders] = useState([
+    'word',
+    'meaning',
+    'example',
+    'phrase',
+  ]);
+  const [sourceHeaders, setSourceHeaders] = useState([
     'word',
     'meaning',
     'example',
@@ -66,6 +77,7 @@ export default function WordroomClient() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [dragging, setDragging] = useState(false);
   const [message, setMessage] = useState('');
+  const [starred, setStarred] = useState<Set<number>>(() => new Set());
 
   const replaceWords = (mapped: Word[]) => {
     setWords(mapped);
@@ -74,9 +86,19 @@ export default function WordroomClient() {
     setFlipped(false);
     setDrawCount(mapped.length ? Math.min(3, mapped.length) : 1);
     setDrawn(mapped.slice(0, Math.min(3, mapped.length)));
+    setAnswers({});
   };
   const applyMapping = (next: Mapping) => {
     const mapped = createWords(rawRows, next);
+    const validSourceIndices = new Set(mapped.map((item) => item.sourceIndex));
+    setStarred(
+      (currentStars) =>
+        new Set(
+          [...currentStars].filter((sourceIndex) =>
+            validSourceIndices.has(sourceIndex),
+          ),
+        ),
+    );
     replaceWords(mapped);
     setMessage(mapped.length ? '' : '所选“单词”列中没有有效内容');
   };
@@ -94,6 +116,7 @@ export default function WordroomClient() {
       const data = rows.slice(1);
       const mapped = createWords(data, next);
       setFileName(file.name);
+      setSourceHeaders(rows[0]);
       setHeaders(rows[0].map((header, i) => header || `第 ${i + 1} 列`));
       setRawRows(data);
       setMapping(next);
@@ -102,6 +125,7 @@ export default function WordroomClient() {
         example: next.example != null,
         phrase: next.phrase != null,
       });
+      setStarred(new Set());
       replaceWords(mapped);
       if (!mapped.length) setMessage('所选“单词”列中没有有效内容');
     } catch (error) {
@@ -127,6 +151,28 @@ export default function WordroomClient() {
   const draw = () => {
     setDrawn(shuffle(words).slice(0, Math.min(drawCount, words.length)));
     setAnswers({});
+  };
+  const toggleStar = (sourceIndex: number) => {
+    setStarred((currentStars) => {
+      const next = new Set(currentStars);
+      if (next.has(sourceIndex)) next.delete(sourceIndex);
+      else next.add(sourceIndex);
+      return next;
+    });
+  };
+  const exportStarred = () => {
+    if (!starred.size) return;
+    const csv = createStarredCSV(sourceHeaders, rawRows, starred);
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const baseName = fileName.replace(/\.csv$/i, '') || 'wordroom';
+    link.href = url;
+    link.download = `${baseName}-星标.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   useEffect(() => {
@@ -177,7 +223,7 @@ export default function WordroomClient() {
       },
       annotations: { readOnlyHint: false, untrustedContentHint: true },
       execute(input: unknown) {
-        const list = (input as { words?: Word[] }).words;
+        const list = (input as { words?: WordInput[] }).words;
         if (
           !Array.isArray(list) ||
           !list.length ||
@@ -187,7 +233,18 @@ export default function WordroomClient() {
           )
         )
           throw new Error('words 必须是至少包含一个有效单词的数组');
-        const clean = list.map((item) => ({ ...item, word: item.word.trim() }));
+        const clean: Word[] = list.map((item, sourceIndex) => ({
+          ...item,
+          sourceIndex,
+          word: item.word.trim(),
+        }));
+        const importedHeaders = ['word', 'meaning', 'example', 'phrase'];
+        const importedRows = clean.map((item) => [
+          item.word,
+          item.meaning ?? '',
+          item.example ?? '',
+          item.phrase ?? '',
+        ]);
         setWords(clean);
         setDeck(shuffle(clean));
         setIndex(0);
@@ -195,6 +252,12 @@ export default function WordroomClient() {
         setDrawn(clean.slice(0, Math.min(3, clean.length)));
         setDrawCount(Math.min(3, clean.length));
         setFileName('自动导入的词表');
+        setHeaders(importedHeaders);
+        setSourceHeaders(importedHeaders);
+        setRawRows(importedRows);
+        setMapping({ word: 0, meaning: 1, example: 2, phrase: 3 });
+        setIncluded({ meaning: true, example: true, phrase: true });
+        setStarred(new Set());
         return { count: clean.length };
       },
     });
@@ -265,8 +328,19 @@ export default function WordroomClient() {
               </p>
             </div>
           </div>
-          <div className="rounded-full border bg-muted px-3 py-1.5 text-sm font-medium">
-            {words.length} 个单词
+          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+            <div className="rounded-full border bg-muted px-3 py-1.5 text-sm font-medium">
+              {words.length} 个单词
+            </div>
+            <Button
+              variant="outline"
+              disabled={!starred.size}
+              onClick={exportStarred}
+              aria-label={`导出 ${starred.size} 个星标单词`}
+            >
+              <Download />
+              导出星标（{starred.size}）
+            </Button>
           </div>
         </div>
       </header>
@@ -443,42 +517,60 @@ export default function WordroomClient() {
               </div>
               <Progress value={progress} className="mb-6" />
               {current ? (
-                <button
-                  onClick={() => setFlipped(!flipped)}
-                  className="group relative flex min-h-[390px] w-full flex-col items-center justify-center overflow-hidden rounded-[2rem] border bg-card px-8 py-12 text-center shadow-[0_20px_60px_-30px_rgba(30,64,55,.45)] transition hover:-translate-y-0.5 hover:shadow-xl"
-                >
-                  <div className="absolute inset-x-0 top-0 h-2 bg-primary" />
-                  <span className="mb-5 rounded-full bg-accent px-3 py-1 text-xs font-semibold text-primary">
-                    {flipped ? '答案' : '点击翻面'}
-                  </span>
-                  <h2 className="font-serif text-5xl font-semibold tracking-tight sm:text-6xl">
-                    {current.word}
-                  </h2>
-                  {flipped ? (
-                    <div className="mt-8 w-full max-w-xl space-y-5 text-left">
-                      {optionalFields.map(
-                        (field) =>
-                          current[field] && (
-                            <div
-                              key={field}
-                              className="grid grid-cols-[64px_1fr] gap-4 border-t pt-4"
-                            >
-                              <span className="text-sm font-semibold text-primary">
-                                {labels[field]}
-                              </span>
-                              <span className="text-base leading-7">
-                                {current[field]}
-                              </span>
-                            </div>
-                          ),
-                      )}
-                    </div>
-                  ) : (
-                    <p className="mt-6 text-sm text-muted-foreground">
-                      先在心里回忆，再查看答案
-                    </p>
-                  )}
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setFlipped(!flipped)}
+                    className="group relative flex min-h-[390px] w-full flex-col items-center justify-center overflow-hidden rounded-[2rem] border bg-card px-8 py-12 text-center shadow-[0_20px_60px_-30px_rgba(30,64,55,.45)] transition hover:-translate-y-0.5 hover:shadow-xl"
+                  >
+                    <div className="absolute inset-x-0 top-0 h-2 bg-primary" />
+                    <span className="mb-5 rounded-full bg-accent px-3 py-1 text-xs font-semibold text-primary">
+                      {flipped ? '答案' : '点击翻面'}
+                    </span>
+                    <h2 className="font-serif text-5xl font-semibold tracking-tight sm:text-6xl">
+                      {current.word}
+                    </h2>
+                    {flipped ? (
+                      <div className="mt-8 w-full max-w-xl space-y-5 text-left">
+                        {optionalFields.map(
+                          (field) =>
+                            current[field] && (
+                              <div
+                                key={field}
+                                className="grid grid-cols-[64px_1fr] gap-4 border-t pt-4"
+                              >
+                                <span className="text-sm font-semibold text-primary">
+                                  {labels[field]}
+                                </span>
+                                <span className="text-base leading-7">
+                                  {current[field]}
+                                </span>
+                              </div>
+                            ),
+                        )}
+                      </div>
+                    ) : (
+                      <p className="mt-6 text-sm text-muted-foreground">
+                        先在心里回忆，再查看答案
+                      </p>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className={`absolute right-5 top-5 z-10 grid size-11 place-items-center rounded-full border bg-card text-amber-600 shadow-sm transition hover:scale-105 ${starred.has(current.sourceIndex) ? 'border-amber-400 bg-amber-50' : ''}`}
+                    onClick={() => toggleStar(current.sourceIndex)}
+                    aria-pressed={starred.has(current.sourceIndex)}
+                    aria-label={`${starred.has(current.sourceIndex) ? '取消' : '给'} ${current.word} ${starred.has(current.sourceIndex) ? '的星标' : '加星标'}`}
+                  >
+                    <Star
+                      size={22}
+                      fill={
+                        starred.has(current.sourceIndex)
+                          ? 'currentColor'
+                          : 'none'
+                      }
+                    />
+                  </button>
+                </div>
               ) : (
                 <div className="grid min-h-[390px] place-items-center rounded-[2rem] border border-dashed text-muted-foreground">
                   请导入包含单词的 CSV 文件
@@ -560,26 +652,44 @@ export default function WordroomClient() {
               <div className="grid gap-4 xl:grid-cols-2">
                 {drawn.map((word, i) => (
                   <article
-                    key={`${word.word}-${i}`}
+                    key={word.sourceIndex}
                     className="rounded-2xl border bg-background p-5"
                   >
-                    <div className="mb-4">
-                      <span className="mr-3 text-xs font-semibold text-primary">
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
-                      <strong className="font-serif text-2xl">
-                        {word.word}
-                      </strong>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <span className="mr-3 text-xs font-semibold text-primary">
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <strong className="font-serif text-2xl">
+                          {word.word}
+                        </strong>
+                      </div>
+                      <button
+                        type="button"
+                        className={`grid size-10 shrink-0 place-items-center rounded-full border bg-card text-amber-600 transition hover:scale-105 ${starred.has(word.sourceIndex) ? 'border-amber-400 bg-amber-50' : ''}`}
+                        onClick={() => toggleStar(word.sourceIndex)}
+                        aria-pressed={starred.has(word.sourceIndex)}
+                        aria-label={`${starred.has(word.sourceIndex) ? '取消' : '给'} ${word.word} ${starred.has(word.sourceIndex) ? '的星标' : '加星标'}`}
+                      >
+                        <Star
+                          size={20}
+                          fill={
+                            starred.has(word.sourceIndex)
+                              ? 'currentColor'
+                              : 'none'
+                          }
+                        />
+                      </button>
                     </div>
                     <Textarea
                       rows={3}
                       placeholder={`用 ${word.word} 写一个例句…`}
                       aria-label={`用 ${word.word} 写例句`}
-                      value={answers[i] || ''}
+                      value={answers[word.sourceIndex] || ''}
                       onChange={(e) =>
                         setAnswers((a) => ({
                           ...a,
-                          [i]: e.target.value,
+                          [word.sourceIndex]: e.target.value,
                         }))
                       }
                     />

@@ -16,7 +16,17 @@
           <b>词间 · Wordroom</b><small>把你的词表，变成今天的练习</small>
         </div>
       </div>
-      <div class="count"><span id="count">6</span> 个单词</div>
+      <div class="header-actions">
+        <div class="count"><span id="count">6</span> 个单词</div>
+        <button
+          id="exportBtn"
+          class="btn alt export-btn"
+          type="button"
+          disabled
+        >
+          ↓ 导出星标（0）
+        </button>
+      </div>
     </header>
     <main class="layout">
       <aside class="side">
@@ -69,7 +79,18 @@
             <b>今日复习</b><span id="position"></span>
           </div>
           <div class="bar"><i id="progress"></i></div>
-          <button id="card" class="card" type="button"></button>
+          <div class="card-shell">
+            <button id="card" class="card" type="button"></button>
+            <button
+              id="cardStar"
+              class="star-btn card-star"
+              type="button"
+              aria-label="给当前单词加星标"
+              disabled
+            >
+              ☆
+            </button>
+          </div>
           <div class="nav">
             <button id="prev" class="btn alt" type="button">← 上一个</button
             ><button id="flip" class="btn alt" type="button">↻ 翻面</button

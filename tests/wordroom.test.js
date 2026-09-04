@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   clampCount,
+  createStarredCSV,
   createWords,
   detectMapping,
   escapeHTML,
   parseCSV,
+  serializeCSV,
   shuffled,
 } from '../wordroom.js';
 
@@ -44,10 +46,43 @@ test('仅创建有单词的记录，不读取未启用字段', () =>
       phrase: null,
     }),
     [
-      { word: 'hello', meaning: '你好', example: '', phrase: '' },
-      { word: 'world', meaning: '', example: '', phrase: '' },
+      {
+        sourceIndex: 0,
+        word: 'hello',
+        meaning: '你好',
+        example: '',
+        phrase: '',
+      },
+      {
+        sourceIndex: 2,
+        word: 'world',
+        meaning: '',
+        example: '',
+        phrase: '',
+      },
     ],
   ));
+test('CSV 导出会正确处理逗号、引号和换行', () =>
+  assert.equal(
+    serializeCSV([
+      ['word', 'example'],
+      ['hello', 'He said "hello", then left.'],
+      ['line', 'first\nsecond'],
+    ]),
+    'word,example\r\nhello,"He said ""hello"", then left."\r\nline,"first\nsecond"',
+  ));
+test('星标导出保留完整表头、原始列和原始行顺序', () => {
+  const csv = createStarredCSV(
+    ['word', 'meaning', 'notes'],
+    [
+      ['one', '一', 'A'],
+      ['two', '二', 'B'],
+      ['three', '三', 'C'],
+    ],
+    [2, 0, 2, 99, -1],
+  );
+  assert.equal(csv, 'word,meaning,notes\r\none,一,A\r\nthree,三,C');
+});
 test('抽词数量始终限制在有效范围', () => {
   assert.equal(clampCount('', 5), 1);
   assert.equal(clampCount(-2, 5), 1);
