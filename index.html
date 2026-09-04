@@ -1,14 +1,108 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>词间 · Wordroom</title><meta name="description" content="CSV 背单词与抽词造句小游戏"><style>
-*{box-sizing:border-box}body{margin:0;background:#f7f6ef;color:#183b32;font:16px system-ui,-apple-system,sans-serif}header{height:72px;background:#fff;border-bottom:1px solid #ddd9ca;display:flex;align-items:center;justify-content:space-between;padding:0 max(24px,calc((100vw - 1380px)/2))}.brand{display:flex;gap:12px;align-items:center}.logo{width:40px;height:40px;border-radius:12px;background:#286b58;color:#fff;display:grid;place-items:center;font-size:20px}.brand b{font-size:19px}.brand small{display:block;color:#71817c}.count{background:#eeede5;border:1px solid #d9d7cb;border-radius:99px;padding:7px 13px;font-weight:600}.layout{max-width:1380px;margin:auto;padding:24px;display:grid;grid-template-columns:310px 1fr;gap:24px}.panel,.workspace{background:#fff;border:1px solid #ddd9ca;border-radius:25px;padding:20px;box-shadow:0 8px 25px #173d3210}.side{display:flex;flex-direction:column;gap:18px}h2{font-size:16px;margin:0 0 14px}.drop{border:2px dashed #c7c9be;background:#f5f5ef;border-radius:18px;padding:26px 10px;text-align:center;cursor:pointer}.drop.drag{border-color:#286b58;background:#e5f1e9}.drop strong{display:block;margin:9px}.muted{font-size:13px;color:#74817c}.file{margin-top:12px;padding:10px;background:#eaf2e9;border-radius:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.field{display:grid;grid-template-columns:75px 1fr;align-items:center;gap:10px;margin:10px 0}.field label{font-size:14px;font-weight:600}select,input,textarea,button{font:inherit}select,input[type=number]{height:40px;border:1px solid #d3d4c9;border-radius:10px;background:#fff;padding:0 10px;width:100%}.checks{border-top:1px solid #e2e0d6;margin-top:16px;padding-top:14px}.checks label{display:block;margin:11px 0;font-size:14px}.tabs{display:flex;justify-content:space-between;gap:12px;margin-bottom:24px}.tabset{background:#efeee7;border-radius:12px;padding:4px}.tabset button{border:0;background:transparent;padding:10px 16px;border-radius:9px;color:#6d7b76;cursor:pointer}.tabset button.active{background:#fff;color:#286b58;font-weight:700;box-shadow:0 2px 8px #0001}.btn{border:0;border-radius:10px;background:#286b58;color:#fff;padding:10px 15px;font-weight:650;cursor:pointer}.btn.alt{background:#fff;color:#29483f;border:1px solid #d6d7cc}.progressline{display:flex;justify-content:space-between;margin-bottom:10px;font-size:14px}.bar{height:8px;background:#e8e7df;border-radius:8px;overflow:hidden;margin-bottom:22px}.bar i{display:block;height:100%;background:#286b58}.card{min-height:390px;border:1px solid #dadacf;border-radius:30px;box-shadow:0 22px 55px #173d3220;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:42px;cursor:pointer;text-align:center;position:relative;overflow:hidden}.card:before{content:'';position:absolute;top:0;left:0;right:0;height:7px;background:#286b58}.pill{background:#e6f1e8;color:#286b58;border-radius:99px;padding:6px 12px;font-size:12px;font-weight:700}.word{font:600 58px Georgia,serif;margin:22px 0}.answer{width:100%;max-width:650px;text-align:left}.answer div{display:grid;grid-template-columns:66px 1fr;gap:14px;border-top:1px solid #ddd;padding:15px 0}.answer b{color:#286b58}.nav{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;margin-top:22px}.drawhead{background:#e9f2e9;border-radius:18px;padding:18px;display:flex;align-items:end;justify-content:space-between;gap:15px;margin-bottom:20px}.drawcontrols{display:flex;align-items:center;gap:10px}.drawcontrols input{width:72px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.item{border:1px solid #dcdbd2;border-radius:18px;padding:18px}.item h3{margin:0 0 14px;font:600 24px Georgia}.item small{float:right;color:#6f7c78;font:13px system-ui}.item textarea{width:100%;min-height:78px;border:1px solid #d8d7cd;border-radius:12px;padding:12px;resize:vertical}.item details{margin-top:10px;background:#efeee8;padding:10px;border-radius:10px}.hide{display:none}@media(max-width:850px){.layout{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.word{font-size:42px}.card{min-height:330px}.drawhead{align-items:stretch;flex-direction:column}.tabs{align-items:flex-start}.workspace{padding:16px}}
-</style></head><body><header><div class="brand"><div class="logo">✦</div><div><b>词间 · Wordroom</b><small>把你的词表，变成今天的练习</small></div></div><div class="count"><span id="count">6</span> 个单词</div></header><main class="layout"><aside class="side"><section class="panel"><h2>▣ 导入词表</h2><div id="drop" class="drop"><div style="font-size:24px">↥</div><strong>拖入 CSV 文件</strong><span class="muted">或点击选择 · 首行为列名</span></div><input id="fileInput" type="file" accept=".csv,text/csv" hidden><div id="filename" class="file">✓ 示例词库.csv</div></section><section class="panel"><h2>CSV 里有什么？</h2><p class="muted">勾选文件包含的内容，再指定对应列。单词为必选。</p><div class="checks" style="border-top:0;margin-top:0;padding-top:0"><label><input type="checkbox" checked disabled> 单词（必选）</label><label><input type="checkbox" data-show="meaning" checked> 释义</label><label><input type="checkbox" data-show="example" checked> 例句</label><label><input type="checkbox" data-show="phrase" checked> 搭配词组</label></div><div id="mapping"></div></section></aside><section class="workspace"><div class="tabs"><div class="tabset"><button id="cardsTab" class="active">▣ 随机卡片</button><button id="drawTab">⤨ 抽词练习</button></div><button id="shuffleBtn" class="btn alt">⤨ 重新洗牌</button></div><div id="cardsView"><div class="progressline"><b>今日复习</b><span id="position"></span></div><div class="bar"><i id="progress"></i></div><div id="card" class="card"></div><div class="nav"><button id="prev" class="btn alt">← 上一个</button><button id="flip" class="btn alt">↻ 翻面</button><button id="next" class="btn">下一个 →</button></div><p class="muted" style="text-align:center">点击卡片翻面 · 每次洗牌都会生成新的顺序</p></div><div id="drawView" class="hide"><div class="drawhead"><div><h2>随机抽取一组词</h2><span class="muted">不看答案，试着为每个词写一个自己的例句。</span></div><div class="drawcontrols"><span>抽取</span><input id="drawCount" type="number" min="1" value="3"><span>个词</span><button id="drawBtn" class="btn">⤨ 重新抽取</button></div></div><div id="drawGrid" class="grid"></div></div></section></main><script>
-const sample=[{word:'serendipity',meaning:'意外发现美好事物的运气',example:'We met by pure serendipity.',phrase:'a stroke of serendipity'},{word:'resilient',meaning:'有韧性的；适应力强的',example:'Children can be remarkably resilient.',phrase:'resilient community'},{word:'eloquent',meaning:'雄辩的；有说服力的',example:'She gave an eloquent speech.',phrase:'eloquent testimony'},{word:'meticulous',meaning:'一丝不苟的；细致的',example:'He kept meticulous records.',phrase:'meticulous attention'},{word:'wanderlust',meaning:'旅行癖；漫游的渴望',example:'The photos awakened her wanderlust.',phrase:'satisfy your wanderlust'},{word:'pragmatic',meaning:'务实的；讲求实际的',example:'We need a pragmatic solution.',phrase:'pragmatic approach'}];
-let words=[...sample],deck=[...sample],idx=0,flipped=false,headers=['word','meaning','example','phrase'],rows=sample.map(x=>[x.word,x.meaning,x.example,x.phrase]),map={word:0,meaning:1,example:2,phrase:3};const labels={word:'单词',meaning:'释义',example:'例句',phrase:'搭配词组'};
-const $=s=>document.querySelector(s),shuffle=a=>{a=[...a];for(let i=a.length-1;i;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a},esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function parseCSV(t){let out=[],r=[],c='',q=false;for(let i=0;i<t.length;i++){let x=t[i];if(x==='"'&&q&&t[i+1]==='"'){c+='"';i++}else if(x==='"')q=!q;else if(x===','&&!q){r.push(c.trim());c=''}else if((x==='\n'||x==='\r')&&!q){if(x==='\r'&&t[i+1]==='\n')i++;r.push(c.trim());if(r.some(Boolean))out.push(r);r=[];c=''}else c+=x}r.push(c.trim());if(r.some(Boolean))out.push(r);return out}
-function mappingUI(){let active=['word',...['meaning','example','phrase'].filter(k=>document.querySelector(`[data-show=${k}]`).checked)];$('#mapping').innerHTML=active.map(k=>`<div class="field"><label>${labels[k]}${k==='word'?' *':''}</label><select data-field="${k}">${headers.map((h,i)=>`<option value="${i}" ${map[k]===i?'selected':''}>${esc(h)}</option>`).join('')}</select></div>`).join('');document.querySelectorAll('[data-field]').forEach(s=>s.onchange=()=>{map[s.dataset.field]=+s.value;applyMap()})}
-function applyMap(){words=rows.map(r=>({word:map.word==null?'':r[map.word]||'',meaning:map.meaning==null?'':r[map.meaning]||'',example:map.example==null?'':r[map.example]||'',phrase:map.phrase==null?'':r[map.phrase]||''})).filter(x=>x.word);deck=shuffle(words);idx=0;flipped=false;$('#count').textContent=words.length;$('#drawCount').max=words.length;renderCard();renderDraw()}
-function renderCard(){let w=deck[idx];$('#position').textContent=deck.length?`${idx+1} / ${deck.length}`:'0 / 0';$('#progress').style.width=deck.length?`${(idx+1)/deck.length*100}%`:'0';$('#prev').disabled=idx===0;$('#next').disabled=idx>=deck.length-1;if(!w){$('#card').innerHTML='<span class="muted">请导入包含单词的 CSV 文件</span>';return}let fields=['meaning','example','phrase'].filter(k=>map[k]!=null&&w[k]);$('#card').innerHTML=`<span class="pill">${flipped?'答案':'点击翻面'}</span><div class="word">${esc(w.word)}</div>${flipped?`<div class="answer">${fields.map(k=>`<div><b>${labels[k]}</b><span>${esc(w[k])}</span></div>`).join('')}</div>`:'<span class="muted">先在心里回忆，再查看答案</span>'}`}
-function renderDraw(){let n=Math.min(+$('#drawCount').value||1,words.length),picked=shuffle(words).slice(0,n);$('#drawGrid').innerHTML=picked.map((w,i)=>`<article class="item"><h3>${String(i+1).padStart(2,'0')}　${esc(w.word)}</h3><textarea placeholder="用 ${esc(w.word)} 写一个例句…"></textarea></article>`).join('')}
-async function load(f){let a=parseCSV(await f.text());if(a.length<2)return;headers=a[0];rows=a.slice(1);let low=headers.map(x=>x.toLowerCase()),find=ns=>{let i=low.findIndex(h=>ns.some(n=>h.includes(n)));return i<0?null:i};map={word:find(['word','单词','vocab'])??0,meaning:find(['meaning','definition','释义','中文']),example:find(['example','sentence','例句']),phrase:find(['phrase','collocation','搭配','词组'])};['meaning','example','phrase'].forEach(k=>document.querySelector(`[data-show=${k}]`).checked=map[k]!=null);$('#filename').textContent='✓ '+f.name;mappingUI();applyMap()}
-$('#drop').onclick=()=>$('#fileInput').click();$('#fileInput').onchange=e=>load(e.target.files[0]);$('#drop').ondragover=e=>{e.preventDefault();$('#drop').classList.add('drag')};$('#drop').ondragleave=()=>$('#drop').classList.remove('drag');$('#drop').ondrop=e=>{e.preventDefault();$('#drop').classList.remove('drag');load(e.dataTransfer.files[0])};$('#card').onclick=$('#flip').onclick=()=>{flipped=!flipped;renderCard()};$('#prev').onclick=()=>{idx--;flipped=false;renderCard()};$('#next').onclick=()=>{idx++;flipped=false;renderCard()};$('#shuffleBtn').onclick=()=>{deck=shuffle(words);idx=0;flipped=false;renderCard()};document.querySelectorAll('[data-show]').forEach(x=>x.onchange=()=>{let k=x.dataset.show;if(x.checked&&map[k]==null)map[k]=Math.min(Object.values(map).filter(v=>v!=null).length,headers.length-1);if(!x.checked)map[k]=null;mappingUI();applyMap()});$('#cardsTab').onclick=()=>{$('#cardsView').classList.remove('hide');$('#drawView').classList.add('hide');$('#cardsTab').classList.add('active');$('#drawTab').classList.remove('active');$('#shuffleBtn').classList.remove('hide')};$('#drawTab').onclick=()=>{$('#drawView').classList.remove('hide');$('#cardsView').classList.add('hide');$('#drawTab').classList.add('active');$('#cardsTab').classList.remove('active');$('#shuffleBtn').classList.add('hide');renderDraw()};$('#drawBtn').onclick=renderDraw;mappingUI();renderCard();renderDraw();
-</script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#286b58" />
+    <title>词间 · Wordroom</title>
+    <meta name="description" content="导入 CSV 词表，随机翻卡与抽词造句。" />
+    <link rel="stylesheet" href="./wordroom.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div class="logo">✦</div>
+        <div>
+          <b>词间 · Wordroom</b><small>把你的词表，变成今天的练习</small>
+        </div>
+      </div>
+      <div class="count"><span id="count">6</span> 个单词</div>
+    </header>
+    <main class="layout">
+      <aside class="side">
+        <section class="panel">
+          <h2>▣ 导入词表</h2>
+          <button id="drop" class="drop" type="button">
+            <span class="upload-icon">↥</span><strong>拖入 CSV 文件</strong
+            ><span class="muted">或点击选择 · 首行为列名 · 最大 5 MB</span>
+          </button>
+          <input id="fileInput" type="file" accept=".csv,text/csv" hidden />
+          <div id="filename" class="file">✓ 示例词库.csv</div>
+          <p id="message" class="message" role="status" aria-live="polite"></p>
+        </section>
+        <section class="panel">
+          <h2>CSV 里有什么？</h2>
+          <p class="muted">勾选文件包含的内容，再指定对应列。单词为必选。</p>
+          <div class="checks">
+            <label
+              ><input type="checkbox" checked disabled /> 单词（必选）</label
+            >
+            <label
+              ><input type="checkbox" data-include="meaning" checked />
+              释义</label
+            >
+            <label
+              ><input type="checkbox" data-include="example" checked />
+              例句</label
+            >
+            <label
+              ><input type="checkbox" data-include="phrase" checked />
+              搭配词组</label
+            >
+          </div>
+          <div id="mapping"></div>
+        </section>
+      </aside>
+      <section class="workspace">
+        <div class="tabs">
+          <div class="tabset">
+            <button id="cardsTab" class="active" type="button">
+              ▣ 随机卡片</button
+            ><button id="drawTab" type="button">⤨ 抽词练习</button>
+          </div>
+          <button id="shuffleBtn" class="btn alt" type="button">
+            ⤨ 重新洗牌
+          </button>
+        </div>
+        <div id="cardsView">
+          <div class="progressline">
+            <b>今日复习</b><span id="position"></span>
+          </div>
+          <div class="bar"><i id="progress"></i></div>
+          <button id="card" class="card" type="button"></button>
+          <div class="nav">
+            <button id="prev" class="btn alt" type="button">← 上一个</button
+            ><button id="flip" class="btn alt" type="button">↻ 翻面</button
+            ><button id="next" class="btn" type="button">下一个 →</button>
+          </div>
+          <p class="muted center">点击卡片翻面 · 每次洗牌都会生成新的顺序</p>
+        </div>
+        <div id="drawView" class="hide">
+          <div class="drawhead">
+            <div>
+              <h2>随机抽取一组词</h2>
+              <span class="muted"
+                >不看答案，试着为每个词写一个自己的例句。</span
+              >
+            </div>
+            <div class="drawcontrols">
+              <label for="drawCount">抽取</label
+              ><input
+                id="drawCount"
+                type="number"
+                min="1"
+                value="3"
+                inputmode="numeric"
+              /><span>个词</span
+              ><button id="drawBtn" class="btn" type="button">
+                ⤨ 重新抽取
+              </button>
+            </div>
+          </div>
+          <div id="drawGrid" class="grid"></div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./wordroom.js"></script>
+  </body>
+</html>
