@@ -56,6 +56,12 @@ header {
 .export-btn {
   white-space: nowrap;
 }
+.language-select {
+  width: auto;
+  min-width: 108px;
+  font-weight: 650;
+  cursor: pointer;
+}
 .layout {
   max-width: 1380px;
   margin: auto;
@@ -416,6 +422,9 @@ input[type='number'] {
   .export-btn {
     padding: 8px 10px;
     font-size: 13px;
+  }
+  .language-select {
+    min-width: 100px;
   }
 }
 .sr-only {

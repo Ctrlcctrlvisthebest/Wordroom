@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  TRANSLATIONS,
   clampCount,
   createStarredCSV,
   createWords,
@@ -9,6 +10,7 @@ import {
   parseCSV,
   serializeCSV,
   shuffled,
+  translate,
 } from '../wordroom.js';
 
 test('解析 BOM、CRLF、逗号、换行和转义引号', () => {
@@ -37,6 +39,24 @@ test('自动识别不会把同一列分配给多个字段', () =>
     example: null,
     phrase: null,
   }));
+test('自动识别西班牙语 CSV 表头', () =>
+  assert.deepEqual(
+    detectMapping(['palabra', 'significado', 'ejemplo', 'colocación']),
+    { word: 0, meaning: 1, example: 2, phrase: 3 },
+  ));
+test('中英西三语文案支持变量替换和未知语言回退', () => {
+  assert.equal(translate('en', 'wordCount', { count: 3 }), '3 words');
+  assert.equal(
+    translate('es', 'addStar', { word: 'hola' }),
+    'Añadir hola a favoritas',
+  );
+  assert.equal(translate('unknown', 'field_word'), '单词');
+});
+test('三种语言包拥相同的文案键', () => {
+  const expected = Object.keys(TRANSLATIONS.zh).sort();
+  assert.deepEqual(Object.keys(TRANSLATIONS.en).sort(), expected);
+  assert.deepEqual(Object.keys(TRANSLATIONS.es).sort(), expected);
+});
 test('仅创建有单词的记录，不读取未启用字段', () =>
   assert.deepEqual(
     createWords([['hello', '你好'], ['', '空'], ['world']], {

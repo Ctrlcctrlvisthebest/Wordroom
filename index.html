@@ -13,11 +13,18 @@
       <div class="brand">
         <div class="logo">✦</div>
         <div>
-          <b>词间 · Wordroom</b><small>把你的词表，变成今天的练习</small>
+          <b id="brandName">词间 · Wordroom</b
+          ><small id="brandTagline">把你的词表，变成今天的练习</small>
         </div>
       </div>
       <div class="header-actions">
-        <div class="count"><span id="count">6</span> 个单词</div>
+        <label class="sr-only" for="languageSelect">语言</label>
+        <select id="languageSelect" class="language-select" aria-label="语言">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+          <option value="es">Español</option>
+        </select>
+        <div id="count" class="count">6 个单词</div>
         <button
           id="exportBtn"
           class="btn alt export-btn"
@@ -31,33 +38,39 @@
     <main class="layout">
       <aside class="side">
         <section class="panel">
-          <h2>▣ 导入词表</h2>
+          <h2 id="importTitle">▣ 导入词表</h2>
           <button id="drop" class="drop" type="button">
-            <span class="upload-icon">↥</span><strong>拖入 CSV 文件</strong
-            ><span class="muted">或点击选择 · 首行为列名 · 最大 5 MB</span>
+            <span class="upload-icon">↥</span
+            ><strong id="dropTitle">拖入 CSV 文件</strong
+            ><span id="dropHint" class="muted"
+              >或点击选择 · 首行为列名 · 最大 5 MB</span
+            >
           </button>
           <input id="fileInput" type="file" accept=".csv,text/csv" hidden />
           <div id="filename" class="file">✓ 示例词库.csv</div>
           <p id="message" class="message" role="status" aria-live="polite"></p>
         </section>
         <section class="panel">
-          <h2>CSV 里有什么？</h2>
-          <p class="muted">勾选文件包含的内容，再指定对应列。单词为必选。</p>
+          <h2 id="csvContents">CSV 里有什么？</h2>
+          <p id="mappingHint" class="muted">
+            勾选文件包含的内容，再指定对应列。单词为必选。
+          </p>
           <div class="checks">
             <label
-              ><input type="checkbox" checked disabled /> 单词（必选）</label
+              ><input type="checkbox" checked disabled />
+              <span id="requiredWord">单词（必选）</span></label
             >
             <label
               ><input type="checkbox" data-include="meaning" checked />
-              释义</label
+              <span data-field-label="meaning">释义</span></label
             >
             <label
               ><input type="checkbox" data-include="example" checked />
-              例句</label
+              <span data-field-label="example">例句</span></label
             >
             <label
               ><input type="checkbox" data-include="phrase" checked />
-              搭配词组</label
+              <span data-field-label="phrase">搭配词组</span></label
             >
           </div>
           <div id="mapping"></div>
@@ -67,16 +80,18 @@
         <div class="tabs">
           <div class="tabset">
             <button id="cardsTab" class="active" type="button">
-              ▣ 随机卡片</button
-            ><button id="drawTab" type="button">⤨ 抽词练习</button>
+              ▣ <span id="cardsTabLabel">随机卡片</span></button
+            ><button id="drawTab" type="button">
+              ⤨ <span id="drawTabLabel">抽词练习</span>
+            </button>
           </div>
           <button id="shuffleBtn" class="btn alt" type="button">
-            ⤨ 重新洗牌
+            ⤨ <span id="shuffleLabel">重新洗牌</span>
           </button>
         </div>
         <div id="cardsView">
           <div class="progressline">
-            <b>今日复习</b><span id="position"></span>
+            <b id="reviewLabel">今日复习</b><span id="position"></span>
           </div>
           <div class="bar"><i id="progress"></i></div>
           <div class="card-shell">
@@ -96,27 +111,29 @@
             ><button id="flip" class="btn alt" type="button">↻ 翻面</button
             ><button id="next" class="btn" type="button">下一个 →</button>
           </div>
-          <p class="muted center">点击卡片翻面 · 每次洗牌都会生成新的顺序</p>
+          <p id="cardFooter" class="muted center">
+            点击卡片翻面 · 每次洗牌都会生成新的顺序
+          </p>
         </div>
         <div id="drawView" class="hide">
           <div class="drawhead">
             <div>
-              <h2>随机抽取一组词</h2>
-              <span class="muted"
+              <h2 id="drawTitle">随机抽取一组词</h2>
+              <span id="drawHint" class="muted"
                 >不看答案，试着为每个词写一个自己的例句。</span
               >
             </div>
             <div class="drawcontrols">
-              <label for="drawCount">抽取</label
+              <label id="drawLabel" for="drawCount">抽取</label
               ><input
                 id="drawCount"
                 type="number"
                 min="1"
                 value="3"
                 inputmode="numeric"
-              /><span>个词</span
+              /><span id="drawUnit">个词</span
               ><button id="drawBtn" class="btn" type="button">
-                ⤨ 重新抽取
+                ⤨ <span id="redrawLabel">重新抽取</span>
               </button>
             </div>
           </div>
