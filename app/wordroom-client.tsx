@@ -8,6 +8,7 @@ import {
   Download,
   FileSpreadsheet,
   Layers3,
+  MessageCircle,
   RotateCcw,
   Shuffle,
   Sparkles,
@@ -352,7 +353,7 @@ export default function WordroomClient() {
   }, [words]);
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="feedback-space min-h-screen bg-background text-foreground">
       <header className="border-b bg-card/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 lg:px-10">
           <div className="flex items-center gap-3">
@@ -779,6 +780,21 @@ export default function WordroomClient() {
             </div>
           )}
         </section>
+      </div>
+      <div className="feedback-widget" lang="en">
+        <a
+          className="feedback-link"
+          href="https://forms.gle/j6agKyoEvyPoPSjP7"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-describedby="feedback-tooltip"
+        >
+          <MessageCircle aria-hidden="true" />
+          Feedback
+        </a>
+        <div id="feedback-tooltip" className="feedback-tooltip" role="tooltip">
+          <span>Found a bug or have an idea?</span>
+        </div>
       </div>
     </main>
   );

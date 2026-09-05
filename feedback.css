@@ -1,0 +1,93 @@
+/* Shared by the standalone and React pages. Leave room to scroll controls
+   clear of the fixed link, including devices with a bottom safe area. */
+.feedback-space {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+
+html {
+  scroll-padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+
+.feedback-widget {
+  position: fixed;
+  right: calc(1rem + env(safe-area-inset-right, 0px));
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  font-size: 0.875rem;
+}
+
+.feedback-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.625rem 0.9375rem;
+  border: 1px solid var(--border, #d6d7cc);
+  border-radius: var(--radius, 10px);
+  background: var(--card, #fff);
+  color: var(--foreground, #29483f);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 2px 8px #173d3210;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
+}
+
+.feedback-link svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.feedback-link:focus-visible {
+  outline: 2px solid var(--ring, #286b58);
+  outline-offset: 3px;
+}
+
+.feedback-tooltip {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  width: max-content;
+  max-width: calc(100vw - 2rem - env(safe-area-inset-right, 0px));
+  padding-bottom: 0.5rem;
+  visibility: hidden;
+  opacity: 0;
+}
+
+.feedback-tooltip span {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border, #d6d7cc);
+  border-radius: var(--radius, 10px);
+  background: var(--card, #fff);
+  color: var(--foreground, #29483f);
+  box-shadow: 0 2px 8px #173d3210;
+  line-height: 1.5;
+}
+
+.feedback-widget:focus-within .feedback-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .feedback-widget:hover .feedback-tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .feedback-link:hover {
+    background: var(--accent, #e9f2e9);
+    border-color: var(--primary, #286b58);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-link {
+    transition: none;
+  }
+}
