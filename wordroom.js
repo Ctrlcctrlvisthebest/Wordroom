@@ -10,6 +10,8 @@ export const SUPPORTED_LOCALES = ['zh', 'en', 'es'];
 export const TRANSLATIONS = {
   zh: {
     language: '语言',
+    libraryTitle: '词表与设置',
+    practiceNav: '练习方式',
     brandName: '词间 · Wordroom',
     brandTagline: '把你的词表，变成今天的练习',
     siteDescription: '导入 CSV 词表，随机翻卡与抽词造句。',
@@ -66,6 +68,8 @@ export const TRANSLATIONS = {
   },
   en: {
     language: 'Language',
+    libraryTitle: 'Word list & settings',
+    practiceNav: 'Practice mode',
     brandName: 'Wordroom',
     brandTagline: "Turn your word list into today's practice",
     siteDescription:
@@ -125,6 +129,8 @@ export const TRANSLATIONS = {
   },
   es: {
     language: 'Idioma',
+    libraryTitle: 'Lista y ajustes',
+    practiceNav: 'Modo de práctica',
     brandName: 'Wordroom',
     brandTagline: 'Convierte tu lista en la práctica de hoy',
     siteDescription:
@@ -418,7 +424,7 @@ function startApp() {
   function updateExportButton() {
     const count = state.starred.size;
     $('#exportBtn').disabled = count === 0;
-    $('#exportBtn').textContent = `↓ ${t('exportStarred', { count })}`;
+    $('#exportBtn').textContent = t('exportStarred', { count });
     $('#exportBtn').setAttribute('aria-label', t('exportAria', { count }));
   }
 
@@ -434,7 +440,9 @@ function startApp() {
       t('language');
     $('#brandName').textContent = t('brandName');
     $('#brandTagline').textContent = t('brandTagline');
-    $('#importTitle').textContent = `▣ ${t('importList')}`;
+    $('#importTitle').textContent = t('importList');
+    $('#libraryTitle').textContent = t('libraryTitle');
+    $('#practiceNav').setAttribute('aria-label', t('practiceNav'));
     $('#dropTitle').textContent = t('dropTitle');
     $('#dropHint').textContent = t('dropHint');
     $('#csvContents').textContent = t('csvContents');
@@ -552,6 +560,10 @@ function startApp() {
 
   function renderCard() {
     const current = state.deck[state.index];
+    $('#card').classList.toggle(
+      'is-flipped',
+      state.flipped && Boolean(current),
+    );
     $('#position').textContent = state.deck.length
       ? `${state.index + 1} / ${state.deck.length}`
       : '0 / 0';
@@ -744,6 +756,8 @@ function startApp() {
     $('#drawView').classList.toggle('hide', cards);
     $('#cardsTab').classList.toggle('active', cards);
     $('#drawTab').classList.toggle('active', !cards);
+    $('#cardsTab').setAttribute('aria-pressed', String(cards));
+    $('#drawTab').setAttribute('aria-pressed', String(!cards));
     $('#shuffleBtn').classList.toggle('hide', !cards);
     if (!cards) renderDraw();
   }
@@ -754,6 +768,10 @@ function startApp() {
       clampCount($('#drawCount').value, state.words.length) || 1;
   });
   $('#drawBtn').addEventListener('click', drawWords);
+  // Start compact on phones, then leave the disclosure under user control.
+  if (window.matchMedia('(max-width: 760px)').matches) {
+    $('#libraryPanel').open = false;
+  }
   applyLanguage();
 }
 

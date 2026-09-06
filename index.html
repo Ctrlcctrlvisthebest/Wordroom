@@ -3,21 +3,46 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#286b58" />
+    <meta name="theme-color" content="#243550" />
     <title>词间 · Wordroom</title>
     <meta name="description" content="导入 CSV 词表，随机翻卡与抽词造句。" />
     <link rel="stylesheet" href="./wordroom.css" />
     <link rel="stylesheet" href="./feedback.css" />
   </head>
   <body>
-    <header>
+    <header class="site-header">
       <div class="brand">
-        <div class="logo">✦</div>
+        <div class="logo" aria-hidden="true">w.</div>
         <div>
-          <b id="brandName">词间 · Wordroom</b
-          ><small id="brandTagline">把你的词表，变成今天的练习</small>
+          <b id="brandName">词间 · Wordroom</b>
         </div>
       </div>
+      <nav class="tabset" aria-label="练习方式" id="practiceNav">
+        <button
+          id="cardsTab"
+          class="active"
+          type="button"
+          aria-pressed="true"
+          aria-controls="cardsView"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="7" y="6" width="13" height="15" rx="2" />
+            <path d="M16 3H6a2 2 0 0 0-2 2v12" />
+          </svg>
+          <span id="cardsTabLabel">随机卡片</span>
+        </button>
+        <button
+          id="drawTab"
+          type="button"
+          aria-pressed="false"
+          aria-controls="drawView"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5" />
+          </svg>
+          <span id="drawTabLabel">抽词练习</span>
+        </button>
+      </nav>
       <div class="header-actions">
         <label class="sr-only" for="languageSelect">语言</label>
         <select id="languageSelect" class="language-select" aria-label="语言">
@@ -25,74 +50,97 @@
           <option value="en">English</option>
           <option value="es">Español</option>
         </select>
-        <div id="count" class="count">6 个单词</div>
-        <button
-          id="exportBtn"
-          class="btn alt export-btn"
-          type="button"
-          disabled
-        >
-          ↓ 导出星标（0）
-        </button>
       </div>
     </header>
     <main class="layout feedback-space">
       <aside class="side">
-        <section class="panel">
-          <h2 id="importTitle">▣ 导入词表</h2>
-          <button id="drop" class="drop" type="button">
-            <span class="upload-icon">↥</span
-            ><strong id="dropTitle">拖入 CSV 文件</strong
-            ><span id="dropHint" class="muted"
-              >或点击选择 · 首行为列名 · 最大 5 MB</span
-            >
-          </button>
-          <input id="fileInput" type="file" accept=".csv,text/csv" hidden />
-          <div id="filename" class="file">✓ 示例词库.csv</div>
-          <p id="message" class="message" role="status" aria-live="polite"></p>
-        </section>
-        <section class="panel">
-          <h2 id="csvContents">CSV 里有什么？</h2>
-          <p id="mappingHint" class="muted">
-            勾选文件包含的内容，再指定对应列。单词为必选。
-          </p>
-          <div class="checks">
-            <label
-              ><input type="checkbox" checked disabled />
-              <span id="requiredWord">单词（必选）</span></label
-            >
-            <label
-              ><input type="checkbox" data-include="meaning" checked />
-              <span data-field-label="meaning">释义</span></label
-            >
-            <label
-              ><input type="checkbox" data-include="example" checked />
-              <span data-field-label="example">例句</span></label
-            >
-            <label
-              ><input type="checkbox" data-include="phrase" checked />
-              <span data-field-label="phrase">搭配词组</span></label
-            >
+        <details id="libraryPanel" class="library-panel" open>
+          <summary>
+            <span id="libraryTitle">词表与设置</span
+            ><svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m8 10 4 4 4-4" />
+            </svg>
+          </summary>
+          <div class="library-content">
+            <section class="panel">
+              <h2 id="importTitle">导入词表</h2>
+              <button id="drop" class="drop" type="button">
+                <span class="upload-icon" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24">
+                    <path
+                      d="M12 16V3m-5 5 5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"
+                    /></svg></span
+                ><strong id="dropTitle">拖入 CSV 文件</strong
+                ><span id="dropHint" class="muted"
+                  >或点击选择 · 首行为列名 · 最大 5 MB</span
+                >
+              </button>
+              <input id="fileInput" type="file" accept=".csv,text/csv" hidden />
+              <div id="filename" class="file">✓ 示例词库.csv</div>
+              <p
+                id="message"
+                class="message"
+                role="status"
+                aria-live="polite"
+              ></p>
+            </section>
+            <section class="panel">
+              <h2 id="csvContents">CSV 里有什么？</h2>
+              <p id="mappingHint" class="muted">
+                勾选文件包含的内容，再指定对应列。单词为必选。
+              </p>
+              <div class="checks">
+                <label
+                  ><input type="checkbox" checked disabled />
+                  <span id="requiredWord">单词（必选）</span></label
+                >
+                <label
+                  ><input type="checkbox" data-include="meaning" checked />
+                  <span data-field-label="meaning">释义</span></label
+                >
+                <label
+                  ><input type="checkbox" data-include="example" checked />
+                  <span data-field-label="example">例句</span></label
+                >
+                <label
+                  ><input type="checkbox" data-include="phrase" checked />
+                  <span data-field-label="phrase">搭配词组</span></label
+                >
+              </div>
+              <div id="mapping"></div>
+            </section>
           </div>
-          <div id="mapping"></div>
-        </section>
+        </details>
       </aside>
       <section class="workspace">
-        <div class="tabs">
-          <div class="tabset">
-            <button id="cardsTab" class="active" type="button">
-              ▣ <span id="cardsTabLabel">随机卡片</span></button
-            ><button id="drawTab" type="button">
-              ⤨ <span id="drawTabLabel">抽词练习</span>
-            </button>
-          </div>
-          <button id="shuffleBtn" class="btn alt" type="button">
-            ⤨ <span id="shuffleLabel">重新洗牌</span>
+        <div class="library-bar">
+          <div id="count" class="count">6 个单词</div>
+          <button
+            id="exportBtn"
+            class="btn alt export-btn"
+            type="button"
+            disabled
+          >
+            导出星标（0）
           </button>
         </div>
         <div id="cardsView">
+          <div class="workspace-heading">
+            <div>
+              <h1 id="reviewLabel">今日复习</h1>
+              <p id="brandTagline" class="muted">把你的词表，变成今天的练习</p>
+            </div>
+            <button id="shuffleBtn" class="btn alt" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M3 7h3c5 0 7 10 12 10h3m-4-4 4 4-4 4M3 17h3c2 0 3.5-1.7 5-4m3-4c1-1.3 2.5-2 4-2h3m-4-4 4 4-4 4"
+                />
+              </svg>
+              <span id="shuffleLabel">重新洗牌</span>
+            </button>
+          </div>
           <div class="progressline">
-            <b id="reviewLabel">今日复习</b><span id="position"></span>
+            <span id="position" aria-live="polite"></span>
           </div>
           <div class="bar"><i id="progress"></i></div>
           <div class="card-shell">
@@ -119,7 +167,7 @@
         <div id="drawView" class="hide">
           <div class="drawhead">
             <div>
-              <h2 id="drawTitle">随机抽取一组词</h2>
+              <h1 id="drawTitle">随机抽取一组词</h1>
               <span id="drawHint" class="muted"
                 >不看答案，试着为每个词写一个自己的例句。</span
               >
@@ -134,7 +182,7 @@
                 inputmode="numeric"
               /><span id="drawUnit">个词</span
               ><button id="drawBtn" class="btn" type="button">
-                ⤨ <span id="redrawLabel">重新抽取</span>
+                <span id="redrawLabel">重新抽取</span>
               </button>
             </div>
           </div>
