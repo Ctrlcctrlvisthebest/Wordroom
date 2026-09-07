@@ -127,6 +127,16 @@ test('用户内容输出前会转义', () =>
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
+test('GitHub 图标引用本地矢量字形，不依赖设备字体', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const icon = readFileSync(new URL('../favicon.svg', import.meta.url), 'utf8');
+  assert.match(html, /rel="icon"[^>]+href="\.\/favicon\.svg\?v=1"/);
+  assert.match(icon, /viewBox="0 0 64 64"/);
+  assert.match(icon, /fill="#243550"/);
+  assert.match(icon, /<path fill="#fff"/);
+  assert.doesNotMatch(icon, /<text|<script|<image|<foreignObject/);
+});
+
 // Minimal DOM simulation: these regressions check app wiring, not browser layout.
 function createUI({ mobile = false } = {}) {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
