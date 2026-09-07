@@ -291,47 +291,59 @@ export function parseCSV(text) {
   const input = String(text ?? '').replace(/^\uFEFF/, '');
   if (input.length > MAX_CSV_BYTES) throw new Error('errorTooLarge');
   const rows = [];
-  let row = [],
-    cell = '',
-    quoted = false,
-    closedQuote = false;
-  const pushCell = () => {
+  const delimiter = /[",\r\n]/g;
+  let row = [];
+  let cursor = 0;
+  while (cursor <= input.length) {
+    let cell;
+    if (input[cursor] === '"') {
+      const start = cursor + 1;
+      let end = start;
+      let escaped = false;
+      while (true) {
+        end = input.indexOf('"', end);
+        if (end < 0) throw new Error('CSV 中有未闭合的引号');
+        if (input[end + 1] !== '"') break;
+        escaped = true;
+        end += 2;
+      }
+      cell = input.slice(start, end);
+      if (escaped) cell = cell.replaceAll('""', '"');
+      cursor = end + 1;
+      if (
+        cursor < input.length &&
+        input[cursor] !== ',' &&
+        input[cursor] !== '\r' &&
+        input[cursor] !== '\n'
+      )
+        throw new Error('errorMalformedCSV');
+    } else {
+      // Scan delimiters natively and slice once per cell, rather than build
+      // a new string for every character of a potentially long example.
+      delimiter.lastIndex = cursor;
+      const match = delimiter.exec(input);
+      const end = match ? match.index : input.length;
+      if (input[end] === '"') throw new Error('errorMalformedCSV');
+      cell = input.slice(cursor, end);
+      cursor = end;
+    }
+
     if (row.length >= MAX_CSV_COLUMNS) throw new Error('errorTooManyColumns');
     // Keep original cell values for export. Only the study view trims them.
     row.push(cell);
-    cell = '';
-    closedQuote = false;
-  };
-  const pushRow = () => {
-    pushCell();
+    if (input[cursor] === ',') {
+      cursor++;
+      continue;
+    }
     if (row.some((value) => value.trim())) {
       if (rows.length >= MAX_CSV_ROWS + 1) throw new Error('errorTooManyRows');
       rows.push(row);
     }
+    if (cursor === input.length) break;
     row = [];
-  };
-  for (let i = 0; i < input.length; i++) {
-    const char = input[i];
-    if (quoted) {
-      if (char === '"' && input[i + 1] === '"') {
-        cell += '"';
-        i++;
-      } else if (char === '"') {
-        quoted = false;
-        closedQuote = true;
-      } else cell += char;
-    } else if (char === ',') pushCell();
-    else if (char === '\n' || char === '\r') {
-      if (char === '\r' && input[i + 1] === '\n') i++;
-      pushRow();
-    } else if (char === '"' && !cell && !closedQuote) quoted = true;
-    else {
-      if (closedQuote || char === '"') throw new Error('errorMalformedCSV');
-      cell += char;
-    }
+    if (input[cursor] === '\r' && input[cursor + 1] === '\n') cursor++;
+    cursor++;
   }
-  if (quoted) throw new Error('CSV 中有未闭合的引号');
-  pushRow();
   return rows;
 }
 
@@ -384,10 +396,13 @@ export function detectMapping(headers, fallbackWord = 0) {
 
 export function createWords(rows, mapping) {
   if (!Number.isInteger(mapping.word)) return [];
-  return rows
-    .map((row, sourceIndex) => ({
+  const words = [];
+  rows.forEach((row, sourceIndex) => {
+    const word = String(row[mapping.word] ?? '').trim();
+    if (!word) return;
+    words.push({
       sourceIndex,
-      word: String(row[mapping.word] ?? '').trim(),
+      word,
       meaning:
         mapping.meaning == null
           ? ''
@@ -398,8 +413,9 @@ export function createWords(rows, mapping) {
           : String(row[mapping.example] ?? '').trim(),
       phrase:
         mapping.phrase == null ? '' : String(row[mapping.phrase] ?? '').trim(),
-    }))
-    .filter((item) => item.word);
+    });
+  });
+  return words;
 }
 
 export function serializeCSV(rows) {
@@ -613,21 +629,24 @@ function startApp() {
     state.flipped = false;
   }
 
-  function rebuildDeck(preservePractice = false) {
-    const previousWords = new Map(
-      state.words.map((item) => [item.sourceIndex, item.word]),
-    );
-    state.words = createWords(state.rows, state.mapping);
-    const validSourceIndices = new Set(
-      state.words
-        .filter((item) => previousWords.get(item.sourceIndex) === item.word)
-        .map((item) => item.sourceIndex),
-    );
-    state.starred = new Set(
-      [...state.starred].filter((sourceIndex) =>
-        validSourceIndices.has(sourceIndex),
-      ),
-    );
+  function rebuildDeck(words, preservePractice = false) {
+    // Optional-field changes keep word identities intact; fresh imports have
+    // no stars. Only compare identities when a starred Word column changes.
+    if (state.starred.size && !preservePractice) {
+      const previousWords = new Map(
+        state.words.map((item) => [item.sourceIndex, item.word]),
+      );
+      state.starred = new Set(
+        words
+          .filter(
+            (item) =>
+              state.starred.has(item.sourceIndex) &&
+              previousWords.get(item.sourceIndex) === item.word,
+          )
+          .map((item) => item.sourceIndex),
+      );
+    }
+    state.words = words;
     if (preservePractice) {
       const bySource = new Map(
         state.words.map((item) => [item.sourceIndex, item]),
@@ -659,7 +678,8 @@ function startApp() {
       renderMapping();
       return;
     }
-    if (!createWords(state.rows, next).length) {
+    const words = createWords(state.rows, next);
+    if (!words.length) {
       showMessage('errorNoWords');
       renderMapping();
       return;
@@ -668,7 +688,7 @@ function startApp() {
     state.mapping = next;
     showMessage();
     renderMapping();
-    rebuildDeck(preservePractice);
+    rebuildDeck(words, preservePractice);
   }
 
   function renderMapping() {
@@ -744,19 +764,23 @@ function startApp() {
       return;
     }
     $('#card').disabled = false;
-    const fields = OPTIONAL_FIELDS.filter(
-      (field) => state.mapping[field] != null && current[field],
-    );
-    const answer = fields.length
-      ? fields
-          .map(
-            (field) =>
-              `<div><b>${t(`field_${field}`)}</b><span>${escapeHTML(current[field])}</span></div>`,
-          )
-          .join('')
-      : `<span class="muted">${t('noExtra')}</span>`;
+    let detail = `<span class="muted">${t('rememberFirst')}</span>`;
+    if (state.flipped) {
+      const fields = OPTIONAL_FIELDS.filter(
+        (field) => state.mapping[field] != null && current[field],
+      );
+      const answer = fields.length
+        ? fields
+            .map(
+              (field) =>
+                `<div><b>${t(`field_${field}`)}</b><span>${escapeHTML(current[field])}</span></div>`,
+            )
+            .join('')
+        : `<span class="muted">${t('noExtra')}</span>`;
+      detail = `<span class="answer">${answer}</span>`;
+    }
     $('#card').innerHTML =
-      `<span class="pill">${t(state.flipped ? 'answer' : 'clickFlip')}</span><span class="word">${escapeHTML(current.word)}</span>${state.flipped ? `<span class="answer">${answer}</span>` : `<span class="muted">${t('rememberFirst')}</span>`}`;
+      `<span class="pill">${t(state.flipped ? 'answer' : 'clickFlip')}</span><span class="word">${escapeHTML(current.word)}</span>${detail}`;
   }
 
   function renderDraw() {
@@ -836,7 +860,8 @@ function startApp() {
         );
         mapping.word = candidate < 0 ? null : candidate;
       }
-      if (!createWords(rows, mapping).length) throw new Error('errorNoWords');
+      const words = createWords(rows, mapping);
+      if (!words.length) throw new Error('errorNoWords');
       // Commit only after validation; failed imports leave the current work intact.
       state.headers = parsed[0];
       state.rows = rows;
@@ -846,7 +871,7 @@ function startApp() {
       state.mapping = mapping;
       $('#filename').textContent = `✓ ${file.name}`;
       renderMapping();
-      rebuildDeck();
+      rebuildDeck(words);
     } catch (error) {
       if (loadId !== state.loadId) return;
       const errorKey =

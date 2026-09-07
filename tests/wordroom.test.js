@@ -267,6 +267,16 @@ function createUI({
     setTimeout: (fn) => fn(),
   });
   vm.runInContext(js.replace(/^export /gm, ''), context);
+  // Count mapping passes without exposing test hooks in the application.
+  vm.runInContext(
+    `globalThis.wordMappingCalls = 0;
+    const originalCreateWords = createWords;
+    createWords = (...args) => {
+      wordMappingCalls++;
+      return originalCreateWords(...args);
+    };`,
+    context,
+  );
   const $ = (selector) => {
     const element = document.querySelector(selector);
     assert(element, `Missing UI element: ${selector}`);
@@ -284,8 +294,98 @@ function createUI({
   };
   const upload = (text, name = 'test.csv') =>
     uploadFile({ name, size: Buffer.byteLength(text), text: async () => text });
-  return { $, language, upload, uploadFile, document, blobs, html };
+  return {
+    $,
+    language,
+    upload,
+    uploadFile,
+    document,
+    blobs,
+    html,
+    getMappingCalls: () => context.wordMappingCalls,
+  };
 }
+
+test('CSV 单元格边界：空文件、尾随分隔符、混合换行和连续引号', () => {
+  for (const blank of ['', '\uFEFF', '\r\n', ',,', '""', '" \r\n "']) {
+    assert.deepEqual(parseCSV(blank), []);
+  }
+  assert.deepEqual(parseCSV('a,\r\nb,,\rc,""\n'), [
+    ['a', ''],
+    ['b', '', ''],
+    ['c', ''],
+  ]);
+  assert.deepEqual(parseCSV('"""",x\r"a\r\nb"\nlast'), [
+    ['"', 'x'],
+    ['a\r\nb'],
+    ['last'],
+  ]);
+  for (const invalid of ['"a" ', ' "a"', 'a"b', '"a""']) {
+    assert.throws(() => parseCSV(invalid));
+  }
+});
+
+test('长例句和大量转义引号仍完整保留原始内容', () => {
+  const example = ' 长例句, "hello"\r\n'.repeat(20000);
+  const original = [
+    ['word', 'example'],
+    [' hello ', example],
+  ];
+  const parsed = parseCSV(serializeCSV(original));
+  assert.deepEqual(parsed, original);
+  assert.equal(
+    createStarredCSV(parsed[0], parsed.slice(1), [0]),
+    serializeCSV(original),
+  );
+});
+
+test('空单词行跳过可选字段处理，原始行号保持不变', () => {
+  const blank = [' '];
+  Object.defineProperty(blank, 1, {
+    get() {
+      throw new Error('Unused field read');
+    },
+  });
+  const words = createWords([blank, [' valid ', ' meaning ']], {
+    word: 0,
+    meaning: 1,
+  });
+  assert.equal(words.length, 1);
+  assert.equal(words[0].sourceIndex, 1);
+  assert.equal(words[0].meaning, 'meaning');
+});
+
+test('导入和映射各只生成一次单词数据，翻卡星标不重复生成', async () => {
+  const { $, upload, getMappingCalls } = createUI();
+  assert.equal(getMappingCalls(), 0);
+  await upload('word,meaning\nhello,你好');
+  assert.equal(getMappingCalls(), 1);
+  const box = $('[data-include="meaning"]');
+  box.checked = false;
+  box.listeners.change({ target: box });
+  assert.equal(getMappingCalls(), 2);
+  $('#flip').click();
+  $('#cardStar').click();
+  $('#drawBtn').click();
+  assert.equal(getMappingCalls(), 2);
+  await upload('word,meaning\n,没有单词');
+  assert.equal(getMappingCalls(), 3);
+  assert.match($('#card').innerHTML, /hello/);
+  assert.equal($('#cardStar').attrs['aria-pressed'], 'true');
+});
+
+test('更换单词列仅保留同一原始行且单词未变的星标', async () => {
+  const { $, upload, document, blobs } = createUI();
+  await upload('word,alternate\nkeep,keep\nchange,changed');
+  document.querySelectorAll('[data-star]').forEach((button) => button.click());
+  assert.equal($('#exportBtn').textContent, '导出星标（2）');
+  const select = $('#map-word');
+  select.value = '1';
+  select.listeners.change({ target: select });
+  assert.equal($('#exportBtn').textContent, '导出星标（1）');
+  $('#exportBtn').click();
+  assert.equal(await blobs[0].text(), 'word,alternate\r\nkeep,keep');
+});
 
 test('GitHub 页面 ID 唯一，反馈保持安全外链', () => {
   const { html } = createUI();
