@@ -11,7 +11,9 @@ export type Locale = 'zh' | 'en' | 'es';
 
 export const FIELDS: Field[];
 export const OPTIONAL_FIELDS: Exclude<Field, 'word'>[];
-export const LABELS: Record<Field, string>;
+export const MAX_CSV_BYTES: number;
+export const MAX_CSV_ROWS: number;
+export const MAX_CSV_COLUMNS: number;
 export const SUPPORTED_LOCALES: Locale[];
 export const TRANSLATIONS: Record<Locale, Record<string, string>>;
 export const SAMPLE_WORDS: Word[];
@@ -22,7 +24,10 @@ export function translate(
 ): string;
 
 export function parseCSV(text: unknown): string[][];
-export function detectMapping(headers: unknown[]): Mapping;
+export function detectMapping(
+  headers: unknown[],
+  fallbackWord?: number | null,
+): Mapping;
 export function createWords(rows: unknown[][], mapping: Mapping): Word[];
 export function serializeCSV(rows: unknown[][]): string;
 export function createStarredCSV(

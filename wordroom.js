@@ -1,17 +1,24 @@
 export const FIELDS = ['word', 'meaning', 'example', 'phrase'];
-export const OPTIONAL_FIELDS = ['meaning', 'example', 'phrase'];
-export const LABELS = {
-  word: '单词',
-  meaning: '释义',
-  example: '例句',
-  phrase: '搭配词组',
-};
+export const OPTIONAL_FIELDS = FIELDS.slice(1);
+export const MAX_CSV_BYTES = 5 * 1024 * 1024;
+export const MAX_CSV_ROWS = 20000;
+export const MAX_CSV_COLUMNS = 100;
+const DRAW_PAGE_SIZE = 12;
 export const SUPPORTED_LOCALES = ['zh', 'en', 'es'];
 export const TRANSLATIONS = {
   zh: {
     language: '语言',
     libraryTitle: '词表与设置',
     practiceNav: '练习方式',
+    drawPages: '抽词分页',
+    pagePosition: '第 {page} / {total} 页',
+    errorMalformedCSV:
+      'CSV 引号格式有误：含引号的单元格需整体用双引号包围，内部双引号写成两个。',
+    errorTooManyRows: '词表超过 20,000 行，请拆分后导入。',
+    errorTooManyColumns: 'CSV 超过 100 列，请删除不需要的列后导入。',
+    errorInvalidMapping: '请选择有效且未被其他字段占用的列。',
+    errorExport: '无法导出文件，请重试或换用支持文件下载的浏览器。',
+    errorColumnCount: '某些行的列数多于表头；含逗号的内容请用双引号包围。',
     brandName: '词间 · Wordroom',
     brandTagline: '把你的词表，变成今天的练习',
     siteDescription: '导入 CSV 词表，随机翻卡与抽词造句。',
@@ -70,6 +77,20 @@ export const TRANSLATIONS = {
     language: 'Language',
     libraryTitle: 'Word list & settings',
     practiceNav: 'Practice mode',
+    drawPages: 'Writing practice pages',
+    pagePosition: 'Page {page} of {total}',
+    errorMalformedCSV:
+      'Invalid CSV quotes. Enclose quoted cells in double quotes and double any quotes inside them.',
+    errorTooManyRows:
+      'The list exceeds 20,000 rows. Split it into smaller files.',
+    errorTooManyColumns:
+      'The CSV exceeds 100 columns. Remove unused columns first.',
+    errorInvalidMapping:
+      'Choose a valid column that is not assigned to another field.',
+    errorExport:
+      'Could not export the file. Retry or use a browser that supports downloads.',
+    errorColumnCount:
+      'Some rows have more columns than the header. Enclose content containing commas in double quotes.',
     brandName: 'Wordroom',
     brandTagline: "Turn your word list into today's practice",
     siteDescription:
@@ -131,6 +152,20 @@ export const TRANSLATIONS = {
     language: 'Idioma',
     libraryTitle: 'Lista y ajustes',
     practiceNav: 'Modo de práctica',
+    drawPages: 'Páginas de práctica de escritura',
+    pagePosition: 'Página {page} de {total}',
+    errorMalformedCSV:
+      'Comillas CSV no válidas. Encierra la celda entre comillas dobles y duplica las comillas interiores.',
+    errorTooManyRows:
+      'La lista supera las 20.000 filas. Divídela en archivos más pequeños.',
+    errorTooManyColumns:
+      'El CSV supera las 100 columnas. Elimina las columnas innecesarias.',
+    errorInvalidMapping:
+      'Elige una columna válida que no esté asignada a otro campo.',
+    errorExport:
+      'No se pudo exportar. Reintenta o usa un navegador que permita descargas.',
+    errorColumnCount:
+      'Algunas filas tienen más columnas que el encabezado. Encierra entre comillas dobles el contenido con comas.',
     brandName: 'Wordroom',
     brandTagline: 'Convierte tu lista en la práctica de hoy',
     siteDescription:
@@ -195,11 +230,16 @@ export const TRANSLATIONS = {
 };
 
 export function translate(locale, key, variables = {}) {
-  const dictionary = TRANSLATIONS[locale] ?? TRANSLATIONS.zh;
-  const template = dictionary[key] ?? TRANSLATIONS.zh[key] ?? key;
-  return Object.entries(variables).reduce(
-    (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
-    template,
+  const dictionary = Object.hasOwn(TRANSLATIONS, locale)
+    ? TRANSLATIONS[locale]
+    : TRANSLATIONS.zh;
+  const template = Object.hasOwn(dictionary, key)
+    ? dictionary[key]
+    : Object.hasOwn(TRANSLATIONS.zh, key)
+      ? TRANSLATIONS.zh[key]
+      : key;
+  return String(template).replace(/\{(\w+)\}/g, (placeholder, name) =>
+    Object.hasOwn(variables, name) ? String(variables[name]) : placeholder,
   );
 }
 export const SAMPLE_WORDS = [
@@ -249,46 +289,75 @@ export const SAMPLE_WORDS = [
 
 export function parseCSV(text) {
   const input = String(text ?? '').replace(/^\uFEFF/, '');
+  if (input.length > MAX_CSV_BYTES) throw new Error('errorTooLarge');
   const rows = [];
   let row = [],
     cell = '',
-    quoted = false;
+    quoted = false,
+    closedQuote = false;
+  const pushCell = () => {
+    if (row.length >= MAX_CSV_COLUMNS) throw new Error('errorTooManyColumns');
+    // Keep original cell values for export. Only the study view trims them.
+    row.push(cell);
+    cell = '';
+    closedQuote = false;
+  };
+  const pushRow = () => {
+    pushCell();
+    if (row.some((value) => value.trim())) {
+      if (rows.length >= MAX_CSV_ROWS + 1) throw new Error('errorTooManyRows');
+      rows.push(row);
+    }
+    row = [];
+  };
   for (let i = 0; i < input.length; i++) {
     const char = input[i];
-    if (char === '"' && quoted && input[i + 1] === '"') {
-      cell += '"';
-      i++;
-    } else if (char === '"') quoted = !quoted;
-    else if (char === ',' && !quoted) {
-      row.push(cell.trim());
-      cell = '';
-    } else if ((char === '\n' || char === '\r') && !quoted) {
+    if (quoted) {
+      if (char === '"' && input[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (char === '"') {
+        quoted = false;
+        closedQuote = true;
+      } else cell += char;
+    } else if (char === ',') pushCell();
+    else if (char === '\n' || char === '\r') {
       if (char === '\r' && input[i + 1] === '\n') i++;
-      row.push(cell.trim());
-      if (row.some(Boolean)) rows.push(row);
-      row = [];
-      cell = '';
-    } else cell += char;
+      pushRow();
+    } else if (char === '"' && !cell && !closedQuote) quoted = true;
+    else {
+      if (closedQuote || char === '"') throw new Error('errorMalformedCSV');
+      cell += char;
+    }
   }
   if (quoted) throw new Error('CSV 中有未闭合的引号');
-  row.push(cell.trim());
-  if (row.some(Boolean)) rows.push(row);
+  pushRow();
   return rows;
 }
 
-export function detectMapping(headers) {
+export function detectMapping(headers, fallbackWord = 0) {
   const lower = headers.map((value) => String(value).trim().toLowerCase());
   const used = new Set();
   const find = (names) => {
-    const index = lower.findIndex(
-      (header, candidate) =>
-        !used.has(candidate) && names.some((name) => header.includes(name)),
+    let index = lower.findIndex(
+      (header, candidate) => !used.has(candidate) && names.includes(header),
     );
+    if (index < 0)
+      index = lower.findIndex(
+        (header, candidate) =>
+          !used.has(candidate) &&
+          names.some((name) =>
+            name.charCodeAt(0) > 127
+              ? header.includes(name)
+              : header.split(/[\s_()-]+/).includes(name),
+          ),
+      );
     if (index >= 0) used.add(index);
     return index < 0 ? null : index;
   };
-  const word = find(['word', '单词', 'vocab', 'palabra']) ?? 0;
-  used.add(word);
+  const word =
+    find(['word', '单词', 'vocab', 'vocabulary', 'palabra']) ?? fallbackWord;
+  if (word != null) used.add(word);
   return {
     word,
     meaning: find([
@@ -367,9 +436,12 @@ export function shuffled(items, random = Math.random) {
   return copy;
 }
 export function clampCount(value, total) {
-  if (total < 1) return 0;
-  const parsed = Number.parseInt(String(value), 10);
-  return Math.min(total, Math.max(1, Number.isFinite(parsed) ? parsed : 1));
+  if (!Number.isFinite(total) || total < 1) return 0;
+  const parsed = Number(value);
+  return Math.min(
+    Math.floor(total),
+    Math.max(1, Number.isFinite(parsed) ? Math.trunc(parsed) : 1),
+  );
 }
 export function escapeHTML(value) {
   return String(value ?? '').replace(
@@ -398,9 +470,10 @@ function startApp() {
     starred: new Set(),
     answers: new Map(),
     index: 0,
+    drawPage: 0,
+    loadId: 0,
     flipped: false,
-    headers: ['word', 'meaning', 'example', 'phrase'],
-    sourceHeaders: ['word', 'meaning', 'example', 'phrase'],
+    headers: [...FIELDS],
     fileName: '示例词库.csv',
     rows: SAMPLE_WORDS.map((item) => [
       item.word,
@@ -418,8 +491,16 @@ function startApp() {
     state.messageKey = key;
     $('#message').textContent = key ? t(key) : '';
   };
-  const isIncluded = (field) =>
-    field === 'word' || $(`[data-include="${field}"]`).checked;
+
+  function syncControls() {
+    const total = state.words.length;
+    $('#count').textContent = t('wordCount', { count: total });
+    $('#drawCount').max = Math.max(1, total);
+    $('#drawCount').value = clampCount($('#drawCount').value, total) || 1;
+    $('#drawCount').disabled = !total;
+    $('#drawBtn').disabled = !total;
+    $('#shuffleBtn').disabled = !total;
+  }
 
   function updateExportButton() {
     const count = state.starred.size;
@@ -464,9 +545,12 @@ function startApp() {
     $('#drawLabel').textContent = t('drawLabel');
     $('#drawUnit').textContent = t('wordsUnit');
     $('#redrawLabel').textContent = t('redraw');
+    $('#drawPagination').setAttribute('aria-label', t('drawPages'));
+    $('#drawPagePrev').textContent = t('previous');
+    $('#drawPageNext').textContent = t('next');
     if (state.isSample) $('#filename').textContent = `✓ ${t('sampleFile')}`;
     if (state.messageKey) $('#message').textContent = t(state.messageKey);
-    $('#count').textContent = t('wordCount', { count: state.words.length });
+    syncControls();
     updateExportButton();
     renderMapping();
     renderCard();
@@ -474,63 +558,140 @@ function startApp() {
   }
 
   function toggleStar(sourceIndex) {
+    const word = state.words.find((item) => item.sourceIndex === sourceIndex);
+    if (!word) return;
     if (state.starred.has(sourceIndex)) state.starred.delete(sourceIndex);
     else state.starred.add(sourceIndex);
     updateExportButton();
-    renderCard();
-    renderDraw();
+    // Update stars in place: rebuilding the grid loses focus and caret state.
+    updateStarButton($('#cardStar'), state.deck[state.index]);
+    const visibleStar = $(`[data-star="${sourceIndex}"]`);
+    if (visibleStar) updateStarButton(visibleStar, word);
+  }
+
+  function updateStarButton(button, word) {
+    const selected = Boolean(word && state.starred.has(word.sourceIndex));
+    button.disabled = !word;
+    button.textContent = selected ? '★' : '☆';
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+    button.setAttribute(
+      'aria-label',
+      word
+        ? t(selected ? 'removeStar' : 'addStar', { word: word.word })
+        : t('noCurrentStar'),
+    );
   }
 
   function exportStarred() {
     if (!state.starred.size) return;
-    const csv = createStarredCSV(
-      state.sourceHeaders,
-      state.rows,
-      state.starred,
-    );
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const displayFileName = state.isSample ? t('sampleFile') : state.fileName;
-    const baseName = displayFileName.replace(/\.csv$/i, '') || 'wordroom';
-    link.href = url;
-    link.download = `${baseName}${t('starredSuffix')}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    let url, link;
+    try {
+      const csv = createStarredCSV(state.headers, state.rows, state.starred);
+      const blob = new Blob([`\uFEFF${csv}`], {
+        type: 'text/csv;charset=utf-8',
+      });
+      url = URL.createObjectURL(blob);
+      link = document.createElement('a');
+      const displayFileName = state.isSample ? t('sampleFile') : state.fileName;
+      const baseName = displayFileName.replace(/\.csv$/i, '') || 'wordroom';
+      link.href = url;
+      link.download = `${baseName}${t('starredSuffix')}.csv`;
+      document.body.appendChild(link);
+      link.click();
+    } catch {
+      showMessage('errorExport');
+    } finally {
+      link?.remove();
+      if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
   }
 
-  function rebuildDeck() {
+  function resetDeck() {
+    state.deck = shuffled(state.words);
+    state.index = 0;
+    state.flipped = false;
+  }
+
+  function rebuildDeck(preservePractice = false) {
+    const previousWords = new Map(
+      state.words.map((item) => [item.sourceIndex, item.word]),
+    );
     state.words = createWords(state.rows, state.mapping);
     const validSourceIndices = new Set(
-      state.words.map((item) => item.sourceIndex),
+      state.words
+        .filter((item) => previousWords.get(item.sourceIndex) === item.word)
+        .map((item) => item.sourceIndex),
     );
     state.starred = new Set(
       [...state.starred].filter((sourceIndex) =>
         validSourceIndices.has(sourceIndex),
       ),
     );
-    state.deck = shuffled(state.words);
-    state.index = 0;
-    state.flipped = false;
-    $('#count').textContent = t('wordCount', { count: state.words.length });
-    $('#drawCount').max = Math.max(1, state.words.length);
-    $('#drawCount').value =
-      clampCount($('#drawCount').value, state.words.length) || 1;
-    state.drawn = shuffled(state.words).slice(
-      0,
-      clampCount($('#drawCount').value, state.words.length),
-    );
-    state.answers.clear();
-    if (!state.words.length) showMessage('errorNoWords');
+    if (preservePractice) {
+      const bySource = new Map(
+        state.words.map((item) => [item.sourceIndex, item]),
+      );
+      state.deck = state.deck.map((item) => bySource.get(item.sourceIndex));
+      state.drawn = state.drawn.map((item) => bySource.get(item.sourceIndex));
+    } else {
+      resetDeck();
+      drawWords();
+    }
+    syncControls();
     updateExportButton();
     renderCard();
-    renderDraw();
+  }
+
+  function applyMapping(next) {
+    const columns = Object.values(next).filter((value) => value != null);
+    if (
+      !Number.isInteger(next.word) ||
+      columns.some(
+        (value) =>
+          !Number.isInteger(value) ||
+          value < 0 ||
+          value >= state.headers.length,
+      ) ||
+      new Set(columns).size !== columns.length
+    ) {
+      showMessage('errorInvalidMapping');
+      renderMapping();
+      return;
+    }
+    if (!createWords(state.rows, next).length) {
+      showMessage('errorNoWords');
+      renderMapping();
+      return;
+    }
+    const preservePractice = next.word === state.mapping.word;
+    state.mapping = next;
+    showMessage();
+    renderMapping();
+    rebuildDeck(preservePractice);
   }
 
   function renderMapping() {
-    const activeFields = FIELDS.filter(isIncluded);
+    const activeFields = FIELDS.filter((field) => state.mapping[field] != null);
+    const headerCounts = new Map();
+    state.headers.forEach((header) =>
+      headerCounts.set(
+        header.trim(),
+        (headerCounts.get(header.trim()) || 0) + 1,
+      ),
+    );
+    const headerLabels = state.headers.map((header, index) => {
+      const name = header.trim();
+      const column = t('column', { number: index + 1 });
+      return !name
+        ? column
+        : headerCounts.get(name) > 1
+          ? `${name} (${column})`
+          : name;
+    });
+    OPTIONAL_FIELDS.forEach((field) => {
+      $(`[data-include="${field}"]`).checked = state.mapping[field] != null;
+    });
     $('#mapping').innerHTML = activeFields
       .map((field) => {
         const used = new Set(
@@ -539,10 +700,10 @@ function startApp() {
             .map((other) => state.mapping[other])
             .filter(Number.isInteger),
         );
-        const options = state.headers
+        const options = headerLabels
           .map(
             (header, index) =>
-              `<option value="${index}" ${state.mapping[field] === index ? 'selected' : ''} ${used.has(index) ? 'disabled' : ''}>${escapeHTML(header || t('column', { number: index + 1 }))}</option>`,
+              `<option value="${index}" ${state.mapping[field] === index ? 'selected' : ''} ${used.has(index) ? 'disabled' : ''}>${escapeHTML(header)}</option>`,
           )
           .join('');
         return `<div class="field"><label for="map-${field}">${t(`field_${field}`)}${field === 'word' ? ' *' : ''}</label><select id="map-${field}" data-field="${field}">${options}</select></div>`;
@@ -550,10 +711,13 @@ function startApp() {
       .join('');
     document.querySelectorAll('[data-field]').forEach((select) =>
       select.addEventListener('change', () => {
-        state.mapping[select.dataset.field] = Number(select.value);
-        showMessage();
-        renderMapping();
-        rebuildDeck();
+        const field = select.dataset.field;
+        if (!FIELDS.includes(field)) return;
+        applyMapping({
+          ...state.mapping,
+          [field]: select.value === '' ? NaN : Number(select.value),
+        });
+        $(`#map-${field}`)?.focus();
       }),
     );
   }
@@ -573,25 +737,13 @@ function startApp() {
     $('#prev').disabled = state.index <= 0;
     $('#next').disabled = state.index >= state.deck.length - 1;
     $('#flip').disabled = !current;
-    $('#cardStar').disabled = !current;
+    updateStarButton($('#cardStar'), current);
     if (!current) {
-      $('#cardStar').textContent = '☆';
-      $('#cardStar').classList.remove('active');
-      $('#cardStar').setAttribute('aria-pressed', 'false');
-      $('#cardStar').setAttribute('aria-label', t('noCurrentStar'));
       $('#card').disabled = true;
       $('#card').innerHTML = `<span class="muted">${t('importWords')}</span>`;
       return;
     }
     $('#card').disabled = false;
-    const isStarred = state.starred.has(current.sourceIndex);
-    $('#cardStar').textContent = isStarred ? '★' : '☆';
-    $('#cardStar').classList.toggle('active', isStarred);
-    $('#cardStar').setAttribute('aria-pressed', String(isStarred));
-    $('#cardStar').setAttribute(
-      'aria-label',
-      t(isStarred ? 'removeStar' : 'addStar', { word: current.word }),
-    );
     const fields = OPTIONAL_FIELDS.filter(
       (field) => state.mapping[field] != null && current[field],
     );
@@ -608,19 +760,39 @@ function startApp() {
   }
 
   function renderDraw() {
+    const pages = Math.ceil(state.drawn.length / DRAW_PAGE_SIZE);
+    state.drawPage = Math.min(
+      Math.max(0, state.drawPage),
+      Math.max(0, pages - 1),
+    );
+    $('#drawPagination').classList.toggle('hide', pages <= 1);
+    $('#drawPagePrev').disabled = state.drawPage === 0;
+    $('#drawPageNext').disabled = state.drawPage >= pages - 1;
+    $('#drawPagePosition').textContent = t('pagePosition', {
+      page: pages ? state.drawPage + 1 : 0,
+      total: pages,
+    });
+    const start = state.drawPage * DRAW_PAGE_SIZE;
+    const visibleWords = state.drawn.slice(start, start + DRAW_PAGE_SIZE);
     $('#drawGrid').innerHTML = state.drawn.length
-      ? state.drawn
+      ? visibleWords
           .map(
             (item, index) =>
-              `<article class="item"><div class="item-title"><h3>${String(index + 1).padStart(2, '0')}　${escapeHTML(item.word)}</h3><button class="star-btn ${state.starred.has(item.sourceIndex) ? 'active' : ''}" type="button" data-star="${item.sourceIndex}" aria-pressed="${state.starred.has(item.sourceIndex)}" aria-label="${escapeHTML(t(state.starred.has(item.sourceIndex) ? 'removeStar' : 'addStar', { word: item.word }))}">${state.starred.has(item.sourceIndex) ? '★' : '☆'}</button></div><label class="sr-only" for="sentence-${index}">${escapeHTML(t('sentenceAria', { word: item.word }))}</label><textarea id="sentence-${index}" data-answer="${item.sourceIndex}" placeholder="${escapeHTML(t('sentencePlaceholder', { word: item.word }))}">${escapeHTML(state.answers.get(item.sourceIndex) || '')}</textarea></article>`,
+              `<article class="item"><div class="item-title"><h3>${String(start + index + 1).padStart(2, '0')}　${escapeHTML(item.word)}</h3><button class="star-btn" type="button" data-star="${item.sourceIndex}"></button></div><label class="sr-only" for="sentence-${index}">${escapeHTML(t('sentenceAria', { word: item.word }))}</label><textarea id="sentence-${index}" data-answer="${item.sourceIndex}" placeholder="${escapeHTML(t('sentencePlaceholder', { word: item.word }))}">${escapeHTML(state.answers.get(item.sourceIndex) || '')}</textarea></article>`,
           )
           .join('')
       : `<p class="muted">${t('noDrawable')}</p>`;
-    document.querySelectorAll('[data-star]').forEach((button) =>
+    document.querySelectorAll('[data-star]').forEach((button) => {
+      updateStarButton(
+        button,
+        visibleWords.find(
+          (item) => item.sourceIndex === Number(button.dataset.star),
+        ),
+      );
       button.addEventListener('click', () => {
         toggleStar(Number(button.dataset.star));
-      }),
-    );
+      });
+    });
     document.querySelectorAll('[data-answer]').forEach((textarea) =>
       textarea.addEventListener('input', () => {
         state.answers.set(Number(textarea.dataset.answer), textarea.value);
@@ -633,34 +805,50 @@ function startApp() {
     $('#drawCount').value = count || 1;
     state.drawn = shuffled(state.words).slice(0, count);
     state.answers.clear();
+    state.drawPage = 0;
     renderDraw();
   }
 
   async function loadFile(file) {
-    showMessage();
     if (!file) return;
+    const loadId = ++state.loadId;
+    showMessage();
     try {
-      if (file.size > 5 * 1024 * 1024) throw new Error('errorTooLarge');
+      if (file.size > MAX_CSV_BYTES) throw new Error('errorTooLarge');
       if (!file.name.toLowerCase().endsWith('.csv'))
         throw new Error('errorWrongType');
-      const parsed = parseCSV(await file.text());
+      const text = await file.text();
+      if (loadId !== state.loadId) return;
+      const parsed = parseCSV(text);
       if (parsed.length < 2) throw new Error('errorTooFewRows');
-      state.sourceHeaders = parsed[0];
+      const rows = parsed.slice(1);
+      if (rows.some((row) => row.length > parsed[0].length))
+        throw new Error('errorColumnCount');
+      const mapping = detectMapping(parsed[0], null);
+      if (mapping.word == null) {
+        // An unlabeled leading column may be empty; prefer an unused column
+        // with data, but never substitute for an explicitly named empty Word column.
+        const used = new Set(Object.values(mapping));
+        const candidate = parsed[0].findIndex(
+          (_, index) =>
+            !used.has(index) &&
+            rows.some((row) => String(row[index] ?? '').trim()),
+        );
+        mapping.word = candidate < 0 ? null : candidate;
+      }
+      if (!createWords(rows, mapping).length) throw new Error('errorNoWords');
+      // Commit only after validation; failed imports leave the current work intact.
       state.headers = parsed[0];
-      state.rows = parsed.slice(1);
+      state.rows = rows;
       state.fileName = file.name;
       state.isSample = false;
       state.starred.clear();
-      state.answers.clear();
-      state.mapping = detectMapping(state.headers);
-      OPTIONAL_FIELDS.forEach((field) => {
-        $(`[data-include="${field}"]`).checked = state.mapping[field] != null;
-      });
+      state.mapping = mapping;
       $('#filename').textContent = `✓ ${file.name}`;
-      updateExportButton();
       renderMapping();
       rebuildDeck();
     } catch (error) {
+      if (loadId !== state.loadId) return;
       const errorKey =
         error instanceof Error && error.message === 'CSV 中有未闭合的引号'
           ? 'errorUnclosedQuote'
@@ -669,7 +857,7 @@ function startApp() {
             : 'errorRead';
       showMessage(errorKey);
     } finally {
-      $('#fileInput').value = '';
+      if (loadId === state.loadId) $('#fileInput').value = '';
     }
   }
 
@@ -722,15 +910,14 @@ function startApp() {
     renderCard();
   });
   $('#shuffleBtn').addEventListener('click', () => {
-    state.deck = shuffled(state.words);
-    state.index = 0;
-    state.flipped = false;
+    resetDeck();
     renderCard();
   });
   document.querySelectorAll('[data-include]').forEach((checkbox) =>
     checkbox.addEventListener('change', () => {
       const field = checkbox.dataset.include;
-      if (!checkbox.checked) state.mapping[field] = null;
+      if (!OPTIONAL_FIELDS.includes(field)) return;
+      if (!checkbox.checked) applyMapping({ ...state.mapping, [field]: null });
       else {
         const used = new Set(
           Object.values(state.mapping).filter(Number.isInteger),
@@ -742,12 +929,9 @@ function startApp() {
           checkbox.checked = false;
           showMessage('errorNoColumn');
         } else {
-          state.mapping[field] = available;
-          showMessage();
+          applyMapping({ ...state.mapping, [field]: available });
         }
       }
-      renderMapping();
-      rebuildDeck();
     }),
   );
   function switchView(view) {
@@ -759,7 +943,6 @@ function startApp() {
     $('#cardsTab').setAttribute('aria-pressed', String(cards));
     $('#drawTab').setAttribute('aria-pressed', String(!cards));
     $('#shuffleBtn').classList.toggle('hide', !cards);
-    if (!cards) renderDraw();
   }
   $('#cardsTab').addEventListener('click', () => switchView('cards'));
   $('#drawTab').addEventListener('click', () => switchView('draw'));
@@ -768,6 +951,14 @@ function startApp() {
       clampCount($('#drawCount').value, state.words.length) || 1;
   });
   $('#drawBtn').addEventListener('click', drawWords);
+  $('#drawPagePrev').addEventListener('click', () => {
+    state.drawPage--;
+    renderDraw();
+  });
+  $('#drawPageNext').addEventListener('click', () => {
+    state.drawPage++;
+    renderDraw();
+  });
   // Start compact on phones, then leave the disclosure under user control.
   if (window.matchMedia('(max-width: 760px)').matches) {
     $('#libraryPanel').open = false;

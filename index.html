@@ -4,7 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="theme-color" content="#243550" />
-    <link rel="icon" type="image/svg+xml" sizes="any" href="./favicon.svg?v=1" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      sizes="any"
+      href="./favicon.svg?v=1"
+    />
     <title>词间 · Wordroom</title>
     <meta name="description" content="导入 CSV 词表，随机翻卡与抽词造句。" />
     <link rel="stylesheet" href="./wordroom.css" />
@@ -188,6 +193,19 @@
             </div>
           </div>
           <div id="drawGrid" class="grid"></div>
+          <nav id="drawPagination" class="nav hide" aria-label="抽词分页">
+            <button id="drawPagePrev" class="btn alt" type="button">
+              上一个
+            </button>
+            <span
+              id="drawPagePosition"
+              class="center"
+              aria-live="polite"
+            ></span>
+            <button id="drawPageNext" class="btn alt" type="button">
+              下一个
+            </button>
+          </nav>
         </div>
       </section>
     </main>

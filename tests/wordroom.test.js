@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import {
   TRANSLATIONS,
+  MAX_CSV_BYTES,
+  MAX_CSV_ROWS,
+  MAX_CSV_COLUMNS,
   clampCount,
   createStarredCSV,
   createWords,
@@ -124,9 +129,6 @@ test('用户内容输出前会转义', () =>
     '&lt;img onerror=&quot;x&quot;&gt;',
   ));
 
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
-
 test('GitHub 图标引用本地矢量字形，不依赖设备字体', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const icon = readFileSync(new URL('../favicon.svg', import.meta.url), 'utf8');
@@ -138,7 +140,12 @@ test('GitHub 图标引用本地矢量字形，不依赖设备字体', () => {
 });
 
 // Minimal DOM simulation: these regressions check app wiring, not browser layout.
-function createUI({ mobile = false } = {}) {
+function createUI({
+  mobile = false,
+  savedLocale,
+  storageBlocked = false,
+  downloadFailure = false,
+} = {}) {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const js = readFileSync(new URL('../wordroom.js', import.meta.url), 'utf8');
   class Element {
@@ -189,15 +196,13 @@ function createUI({ mobile = false } = {}) {
     focus() {
       document.activeElement = this;
     }
-    select() {
-      this.selected = true;
-    }
-    scrollIntoView() {}
     remove() {}
     appendChild(child) {
       this.children.push(child);
     }
     click() {
+      if (this.tagName === 'A' && downloadFailure)
+        throw new Error('Download blocked');
       if (!this.disabled && this.listeners.click)
         this.listeners.click({ target: this });
     }
@@ -237,13 +242,19 @@ function createUI({ mobile = false } = {}) {
   };
 
   const blobs = [];
-  const storage = new Map();
+  const storage = new Map([['wordroom-language', savedLocale]]);
   const context = vm.createContext({
     document,
     window: { matchMedia: () => ({ matches: mobile }) },
     localStorage: {
-      getItem: (k) => storage.get(k),
-      setItem: (k, v) => storage.set(k, v),
+      getItem: (k) => {
+        if (storageBlocked) throw new Error('Storage blocked');
+        return storage.get(k);
+      },
+      setItem: (k, v) => {
+        if (storageBlocked) throw new Error('Storage blocked');
+        storage.set(k, v);
+      },
     },
     Blob,
     URL: {
@@ -265,13 +276,15 @@ function createUI({ mobile = false } = {}) {
     $('#languageSelect').value = locale;
     $('#languageSelect').listeners.change({ target: $('#languageSelect') });
   };
-  const upload = async (text, name = 'test.csv') => {
+  const uploadFile = async (file) => {
     $('#fileInput').listeners.change({
-      target: { files: [{ name, size: text.length, text: async () => text }] },
+      target: { files: file ? [file] : [] },
     });
     await new Promise((resolve) => setImmediate(resolve));
   };
-  return { $, language, upload, document, blobs, html };
+  const upload = (text, name = 'test.csv') =>
+    uploadFile({ name, size: Buffer.byteLength(text), text: async () => text });
+  return { $, language, upload, uploadFile, document, blobs, html };
 }
 
 test('GitHub 页面 ID 唯一，反馈保持安全外链', () => {
@@ -368,4 +381,380 @@ test('仅单词 CSV、可选字段取消和错误文件不会破坏页面', asyn
   assert.match($('#message').textContent, /未闭合/);
   await upload('word\nhello', 'not-csv.txt');
   assert.match($('#message').textContent, /\.csv/);
+});
+
+test('翻译变量中的美元符号和占位符按字面显示，不再次插值', () => {
+  assert.equal(
+    translate('en', 'sentencePlaceholder', { word: '$& $1 {word}' }),
+    'Write a sentence with $& $1 {word}…',
+  );
+  assert.equal(translate('toString', 'field_word'), '单词');
+  assert.equal(translate('en', 'constructor'), 'constructor');
+});
+
+test('CSV 保留原始空格，学习内容单独清理', () => {
+  const input = ' word ,meaning,extra\r\n" hello ","  space  ","first\nsecond"';
+  const rows = parseCSV(input);
+  assert.deepEqual(rows[1], [' hello ', '  space  ', 'first\nsecond']);
+  assert.equal(
+    createWords(rows.slice(1), detectMapping(rows[0]))[0].word,
+    'hello',
+  );
+  assert.deepEqual(
+    parseCSV(createStarredCSV(rows[0], rows.slice(1), [0])),
+    rows,
+  );
+});
+
+test('CSV 严格拒绝单元格内部未转义引号及闭引号后的文字', () => {
+  for (const csv of ['word\nhe"llo', 'word\n"hello"x', 'word\n"hello" ']) {
+    assert.throws(() => parseCSV(csv), /errorMalformedCSV/);
+  }
+  assert.deepEqual(parseCSV('word,extra\n"a""b",'), [
+    ['word', 'extra'],
+    ['a"b', ''],
+  ]);
+  assert.deepEqual(parseCSV('\uFEFFword\rhello\r\r'), [['word'], ['hello']]);
+  assert.deepEqual(parseCSV(' \n,\n'), []);
+});
+
+test('解析时限制行列数，而不是等巨大数组生成后再检查', () => {
+  assert.equal(
+    parseCSV('word\n' + 'x\n'.repeat(MAX_CSV_ROWS)).length,
+    MAX_CSV_ROWS + 1,
+  );
+  assert.throws(
+    () => parseCSV('word\n' + 'x\n'.repeat(MAX_CSV_ROWS + 1)),
+    /errorTooManyRows/,
+  );
+  assert.equal(
+    parseCSV(Array(MAX_CSV_COLUMNS).fill('h').join(','))[0].length,
+    MAX_CSV_COLUMNS,
+  );
+  assert.throws(
+    () =>
+      parseCSV(
+        Array(MAX_CSV_COLUMNS + 1)
+          .fill('h')
+          .join(','),
+      ),
+    /errorTooManyColumns/,
+  );
+  assert.throws(() => parseCSV('x'.repeat(MAX_CSV_BYTES + 1)), /errorTooLarge/);
+});
+
+test('字段识别优先完整列名，不把 password 误识别为 word', () => {
+  assert.equal(detectMapping(['word example', 'word']).word, 1);
+  assert.equal(detectMapping(['notes', 'password', 'vocabulary']).word, 2);
+  assert.equal(detectMapping(['notes', 'password']).word, 0);
+});
+
+test('抽词数量处理科学计数法、小数、非数值与非法总数', () => {
+  assert.equal(clampCount('1e2', 200), 100);
+  assert.equal(clampCount('3.9', 20), 3);
+  assert.equal(clampCount('12oops', 20), 1);
+  assert.equal(clampCount(Infinity, 20), 1);
+  assert.equal(clampCount(2, NaN), 0);
+  assert.equal(clampCount(5, 3.8), 3);
+});
+
+test('CSV 引号、分隔符、多语言和空白数据的确定性往返测试', () => {
+  const cells = [
+    '你好',
+    'mañana',
+    'hello',
+    'a,b',
+    'a"b',
+    ' a ',
+    'x\r\ny',
+    '$&',
+    '',
+    '\t',
+  ];
+  for (let n = 0; n < 100; n++) {
+    const rows = [
+      ['word', 'meaning', 'example'],
+      ...Array.from({ length: 8 }, (_, i) => [
+        'w' + n + '-' + i,
+        cells[(n + i) % cells.length],
+        cells[(n * 3 + i) % cells.length],
+      ]),
+    ];
+    assert.deepEqual(parseCSV(serializeCSV(rows)), rows);
+  }
+});
+
+test('连续导入只采用最后一次选择，旧读取不能覆盖新词表', async () => {
+  const { $, uploadFile, upload } = createUI();
+  let finish;
+  await uploadFile({
+    name: 'slow.csv',
+    size: 30,
+    text: () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  });
+  await upload('word\nnewest', 'latest.csv');
+  finish('word\nold');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal($('#filename').textContent, '✓ latest.csv');
+  assert.match($('#card').innerHTML, /newest/);
+  assert.doesNotMatch($('#card').innerHTML, />old</);
+});
+
+test('过时读取的错误不会污染新词表的状态提示', async () => {
+  const { $, uploadFile, upload } = createUI();
+  let fail;
+  await uploadFile({
+    name: 'slow.csv',
+    size: 10,
+    text: () =>
+      new Promise((_, reject) => {
+        fail = reject;
+      }),
+  });
+  await upload('word\nlatest');
+  fail(new Error('read failed'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal($('#message').textContent, '');
+  assert.match($('#card').innerHTML, /latest/);
+});
+
+test('错误导入保留旧卡片、星标和已写例句', async () => {
+  const { $, upload, document, blobs } = createUI();
+  await upload('word,meaning\nhello,你好');
+  $('#cardStar').click();
+  const textarea = document.querySelectorAll('[data-answer]')[0];
+  textarea.value = 'Keep my sentence.';
+  textarea.listeners.input({ target: textarea });
+  for (const invalid of [
+    'word,meaning\n,只有释义',
+    'word',
+    'word\n"a"x',
+    'word\nhello,extra',
+  ]) {
+    await upload(invalid);
+    assert.equal($('#count').textContent, '1 个单词');
+    assert.equal($('#cardStar').attrs['aria-pressed'], 'true');
+    assert.equal(document.querySelectorAll('[data-answer]')[0], textarea);
+    assert.equal(textarea.value, 'Keep my sentence.');
+    assert.notEqual($('#message').textContent, '');
+  }
+  $('#exportBtn').click();
+  assert.equal(await blobs[0].text(), 'word,meaning\r\nhello,你好');
+});
+
+test('文件过大、读取失败、取消选择都有安全结果', async () => {
+  const { $, uploadFile } = createUI();
+  let read = false;
+  await uploadFile({
+    name: 'large.csv',
+    size: MAX_CSV_BYTES + 1,
+    text: async () => {
+      read = true;
+      return '';
+    },
+  });
+  assert.equal(read, false);
+  assert.match($('#message').textContent, /5 MB/);
+  await uploadFile({
+    name: 'bad.csv',
+    size: 1,
+    text: async () => {
+      throw Error('denied');
+    },
+  });
+  assert.match($('#message').textContent, /无法读取/);
+  await uploadFile(undefined);
+  assert.equal($('#count').textContent, '6 个单词');
+  assert.match($('#message').textContent, /无法读取/);
+});
+
+test('切换可选字段保留卡片顺序、页码、星标及当前造句节点', async () => {
+  const { $, upload, document } = createUI();
+  await upload('word,meaning\nhello,你好\nworld,世界');
+  $('#next').click();
+  $('#cardStar').click();
+  const position = $('#position').textContent;
+  const textarea = document.querySelectorAll('[data-answer]')[0];
+  textarea.value = 'Do not clear this.';
+  textarea.listeners.input({ target: textarea });
+  const box = $('[data-include="meaning"]');
+  box.checked = false;
+  box.listeners.change({ target: box });
+  assert.equal($('#position').textContent, position);
+  assert.equal($('#cardStar').attrs['aria-pressed'], 'true');
+  assert.equal(document.querySelectorAll('[data-answer]')[0], textarea);
+  assert.equal(textarea.value, 'Do not clear this.');
+  box.checked = true;
+  box.listeners.change({ target: box });
+  assert.equal(document.querySelectorAll('[data-answer]')[0], textarea);
+});
+
+test('星标及模式切换不替换输入节点，保留焦点和选区', async () => {
+  const { $, upload, document } = createUI();
+  await upload('word\nhello');
+  $('#drawTab').click();
+  const textarea = document.querySelectorAll('[data-answer]')[0];
+  textarea.value = 'Hello, world.';
+  textarea.selectionStart = 3;
+  textarea.selectionEnd = 5;
+  textarea.listeners.input({ target: textarea });
+  textarea.focus();
+  document.querySelectorAll('[data-star]')[0].click();
+  assert.equal(document.querySelectorAll('[data-answer]')[0], textarea);
+  assert.equal(document.activeElement, textarea);
+  assert.equal(textarea.selectionStart, 3);
+  assert.equal(textarea.selectionEnd, 5);
+  $('#cardsTab').click();
+  $('#drawTab').click();
+  assert.equal(document.querySelectorAll('[data-answer]')[0], textarea);
+});
+
+test('大批抽词分页显示，跨页、星标、语言切换保留练习', async () => {
+  const { $, upload, language, document } = createUI();
+  await upload(
+    'word\n' + Array.from({ length: 30 }, (_, i) => 'word' + i).join('\n'),
+  );
+  $('#drawCount').value = '30';
+  $('#drawBtn').click();
+  assert.equal(document.querySelectorAll('[data-answer]').length, 12);
+  assert.equal($('#drawPagePosition').textContent, '第 1 / 3 页');
+  assert.equal($('#drawPagePrev').disabled, true);
+  const textarea = document.querySelectorAll('[data-answer]')[0];
+  textarea.value = 'Remember this sentence.';
+  textarea.listeners.input({ target: textarea });
+  const index = textarea.dataset.answer;
+  document.querySelectorAll('[data-star]')[0].click();
+  $('#drawPageNext').click();
+  $('#drawPageNext').click();
+  assert.equal(document.querySelectorAll('[data-answer]').length, 6);
+  assert.equal($('#drawPageNext').disabled, true);
+  language('es');
+  assert.equal($('#drawPagePosition').textContent, 'Página 3 de 3');
+  $('#drawPagePrev').click();
+  $('#drawPagePrev').click();
+  assert.match($('#drawGrid').innerHTML, /Remember this sentence/);
+  assert.equal($('[data-star="' + index + '"]').attrs['aria-pressed'], 'true');
+  $('#drawCount').value = '1';
+  $('#drawBtn').click();
+  assert.equal($('#drawPagination').classList.contains('hide'), true);
+  assert.equal(document.querySelectorAll('[data-answer]').length, 1);
+});
+
+test('非法、重复及空单词列映射被拒绝，不清空旧词表', async () => {
+  const { $, upload, document } = createUI();
+  await upload('word,meaning,blank\nhello,你好,');
+  const textarea = document.querySelectorAll('[data-answer]')[0];
+  for (const value of ['', '-1', 'NaN', '100', '1', '2']) {
+    const select = $('#map-word');
+    select.value = value;
+    select.listeners.change({ target: select });
+    assert.equal($('#count').textContent, '1 个单词');
+    assert.match($('#card').innerHTML, /hello/);
+    assert.equal(document.querySelectorAll('[data-answer]')[0], textarea);
+    assert.notEqual($('#message').textContent, '');
+  }
+});
+
+test('没有剩余列时启用附加字段不重置练习', async () => {
+  const { $, upload, document } = createUI();
+  await upload('word\nhello');
+  const textarea = document.querySelectorAll('[data-answer]')[0];
+  const checkbox = $('[data-include="meaning"]');
+  checkbox.checked = true;
+  checkbox.listeners.change({ target: checkbox });
+  assert.equal(checkbox.checked, false);
+  assert.equal(document.querySelectorAll('[data-answer]')[0], textarea);
+  assert.match($('#message').textContent, /没有剩余/);
+});
+
+test('重复表头显示列号，可导出原始同名列', async () => {
+  const { $, upload, blobs } = createUI();
+  await upload('word,word\nhello,hola');
+  assert.match($('#mapping').innerHTML, /word \(第 1 列\)/);
+  assert.match($('#mapping').innerHTML, /word \(第 2 列\)/);
+  $('#cardStar').click();
+  $('#exportBtn').click();
+  assert.equal(await blobs[0].text(), 'word,word\r\nhello,hola');
+});
+
+test('下载异常显示错误但保留星标，允许再次导出', () => {
+  const { $ } = createUI({ downloadFailure: true });
+  $('#cardStar').click();
+  assert.doesNotThrow(() => $('#exportBtn').click());
+  assert.match($('#message').textContent, /无法导出/);
+  assert.equal($('#exportBtn').disabled, false);
+});
+
+test('存储被禁用或语言偏好损坏时仍能使用三语界面', () => {
+  for (const options of [
+    { storageBlocked: true },
+    { savedLocale: 'toString' },
+    { savedLocale: 'xx' },
+  ]) {
+    const { $, language, document } = createUI(options);
+    assert.equal(document.documentElement.lang, 'zh-CN');
+    language('en');
+    assert.equal(document.documentElement.lang, 'en');
+    assert.equal($('#libraryTitle').textContent, 'Word list & settings');
+  }
+});
+
+test('示例词表初始化时也正确限制抽词数量', () => {
+  const { $ } = createUI();
+  assert.equal(Number($('#drawCount').max), 6);
+  $('#drawCount').value = '-5';
+  $('#drawBtn').click();
+  assert.equal(Number($('#drawCount').value), 1);
+  $('#drawCount').value = '10000';
+  $('#drawBtn').click();
+  assert.equal(Number($('#drawCount').value), 6);
+});
+
+test('未识别的单词列可以跳过前面的空列或已识别释义列', async () => {
+  const { $, upload } = createUI();
+  await upload('unused,English\n,hello');
+  assert.match($('#card').innerHTML, /hello/);
+  await upload('meaning,English\n你好,world');
+  assert.match($('#card').innerHTML, /world/);
+  $('#flip').click();
+  assert.match($('#card').innerHTML, /你好/);
+});
+
+test('20,000 个词全部抽取时仍只生成 12 个输入框', async () => {
+  const { $, upload, document } = createUI();
+  await upload(
+    'word\n' +
+      Array.from({ length: MAX_CSV_ROWS }, (_, i) => 'w' + i).join('\n'),
+  );
+  assert.equal($('#count').textContent, '20000 个单词');
+  $('#drawCount').value = String(MAX_CSV_ROWS);
+  $('#drawBtn').click();
+  assert.equal(Number($('#drawCount').value), MAX_CSV_ROWS);
+  assert.equal(document.querySelectorAll('[data-answer]').length, 12);
+  assert.equal($('#drawPagePosition').textContent, '第 1 / 1667 页');
+});
+
+test('恶意单词、表头和例句只作为文字显示', async () => {
+  const { $, upload, document } = createUI();
+  const word = '<img src=x onerror="alert(1)"> $&';
+  await upload(
+    serializeCSV([
+      ['word', '<script>alert(1)</script>'],
+      [word, '</textarea><script>alert(1)</script>'],
+    ]),
+  );
+  assert.match($('#mapping').innerHTML, /&lt;script&gt;/);
+  assert.doesNotMatch($('#mapping').innerHTML, /<script>/);
+  assert.doesNotMatch($('#card').innerHTML, /<img/);
+  assert.doesNotMatch($('#drawGrid').innerHTML, /<img|<script>/);
+  const textarea = document.querySelectorAll('[data-answer]')[0];
+  textarea.value = '</textarea><script>alert(1)</script>';
+  textarea.listeners.input({ target: textarea });
+  $('#languageSelect').value = 'en';
+  $('#languageSelect').listeners.change({ target: $('#languageSelect') });
+  assert.match($('#drawGrid').innerHTML, /&lt;\/textarea&gt;/);
+  assert.doesNotMatch($('#drawGrid').innerHTML, /<script>/);
 });
