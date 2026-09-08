@@ -2,8 +2,9 @@ import {
   FIELDS,
   MAX_CSV_ROWS,
   MAX_CSV_COLUMNS,
-  createWords,
-} from './wordroom.js?v=cloud1';
+  MAX_CSV_SOURCES,
+  combineSourceWords,
+} from './wordroom.js?v=multi1';
 
 export const MAX_CLOUD_BYTES = 10 * 1024 * 1024;
 export const MAX_CLOUD_LISTS = 20;
@@ -23,19 +24,14 @@ export function newSyncCode() {
 
 // The same validation runs before upload, at the API boundary, and on restore.
 // Whitespace and unmapped CSV columns stay intact for lossless starred exports.
-export function validateSnapshot(value) {
-  const invalid = () => {
-    throw new Error('invalidSnapshot');
-  };
+function invalid() {
+  throw new Error('invalidSnapshot');
+}
+
+function validateSource(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
-  const { schemaVersion, name, headers, rows, mapping, starred } = value;
-  if (
-    schemaVersion !== 1 ||
-    typeof name !== 'string' ||
-    !name.trim() ||
-    name.length > 200
-  )
-    invalid();
+  const { name, headers, rows, mapping } = value;
+  if (typeof name !== 'string' || !name.trim() || name.length > 200) invalid();
   if (
     !Array.isArray(headers) ||
     !headers.length ||
@@ -69,8 +65,42 @@ export function validateSnapshot(value) {
       invalid();
     used.add(column);
   }
-  const words = createWords(rows, mapping);
-  if (!words.length) invalid();
+  if (!rows.some((row) => (row[mapping.word] || '').trim())) invalid();
+  return {
+    name,
+    headers,
+    rows,
+    mapping: Object.fromEntries(FIELDS.map((field) => [field, mapping[field]])),
+  };
+}
+
+export function validateSnapshot(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
+  const { schemaVersion, name, starred } = value;
+  if (
+    ![1, 2].includes(schemaVersion) ||
+    typeof name !== 'string' ||
+    !name.trim() ||
+    name.length > 200
+  )
+    invalid();
+  const rawSources = schemaVersion === 1 ? [value] : value.sources;
+  if (
+    !Array.isArray(rawSources) ||
+    !rawSources.length ||
+    rawSources.length > MAX_CSV_SOURCES
+  )
+    invalid();
+  // Check aggregate row limits before constructing study records, including
+  // blank-word rows, which still occupy stable source indices.
+  let rowCount = 0;
+  const sources = rawSources.map((source) => {
+    if (!Array.isArray(source?.rows)) invalid();
+    rowCount += source.rows.length;
+    if (rowCount > MAX_CSV_ROWS) invalid();
+    return validateSource(source);
+  });
+  const words = combineSourceWords(sources);
   if (!Array.isArray(starred) || starred.length > words.length) invalid();
   const indices = new Set(words.map((word) => word.sourceIndex));
   if (
@@ -79,11 +109,15 @@ export function validateSnapshot(value) {
   )
     invalid();
   const snapshot = {
-    schemaVersion: 1,
+    ...(schemaVersion === 1
+      ? {
+          schemaVersion: 1,
+          headers: sources[0].headers,
+          rows: sources[0].rows,
+          mapping: sources[0].mapping,
+        }
+      : { schemaVersion: 2, sources }),
     name,
-    headers,
-    rows,
-    mapping: Object.fromEntries(FIELDS.map((field) => [field, mapping[field]])),
     starred,
   };
   const serialized = JSON.stringify(snapshot);

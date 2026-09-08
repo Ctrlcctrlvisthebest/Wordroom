@@ -9,9 +9,12 @@ import {
   MAX_CSV_BYTES,
   MAX_CSV_ROWS,
   MAX_CSV_COLUMNS,
+  MAX_CSV_SOURCES,
+  MAX_IMPORT_BYTES,
   clampCount,
   createStarredCSV,
   createWords,
+  combineSourceWords,
   detectMapping,
   escapeHTML,
   parseCSV,
@@ -294,12 +297,13 @@ function createUI({
     $('#languageSelect').value = locale;
     $('#languageSelect').listeners.change({ target: $('#languageSelect') });
   };
-  const uploadFile = async (file) => {
+  const uploadFiles = async (files) => {
     $('#fileInput').listeners.change({
-      target: { files: file ? [file] : [] },
+      target: { files },
     });
     await new Promise((resolve) => setImmediate(resolve));
   };
+  const uploadFile = (file) => uploadFiles(file ? [file] : []);
   const upload = (text, name = 'test.csv') =>
     uploadFile({ name, size: Buffer.byteLength(text), text: async () => text });
   return {
@@ -307,6 +311,7 @@ function createUI({
     language,
     upload,
     uploadFile,
+    uploadFiles,
     document,
     blobs,
     html,
@@ -314,6 +319,292 @@ function createUI({
     studyApp: vm.runInContext('studyApp', context),
   };
 }
+
+const csvFile = (name, text) => ({
+  name,
+  size: Buffer.byteLength(text),
+  text: async () => text,
+});
+const plain = (value) => JSON.parse(JSON.stringify(value));
+const selectSource = (ui, index) => {
+  const select = ui.$('#sourceSelect');
+  select.value = String(index);
+  select.listeners.change({ target: select });
+};
+const allDrawWords = (ui) => {
+  ui.$('#drawCount').value = '20000';
+  ui.$('#drawBtn').click();
+  return [...ui.document.querySelectorAll('[data-answer]')];
+};
+
+void test('多选 CSV 按各自映射合并；重复单词与空词行保留独立来源', async () => {
+  const ui = createUI();
+  assert.match(ui.html, /id="fileInput"[^>]*\bmultiple\b/);
+  await ui.uploadFiles([
+    csvFile('a.csv', 'word,meaning\n shared , 第一义 \n,skip'),
+    csvFile(
+      'b.csv',
+      'ejemplo,palabra,notes\nAn example.,shared,keep\nOtro.,hola,raw',
+    ),
+  ]);
+  assert.equal(ui.$('#count').textContent, '3 个单词');
+  assert.equal(ui.$('#sourceSettings').classList.contains('hide'), false);
+  const snapshot = plain(ui.studyApp.capture());
+  assert.equal(snapshot.schemaVersion, 2);
+  assert.deepEqual(
+    snapshot.sources.map((source) => source.name),
+    ['a.csv', 'b.csv'],
+  );
+  assert.deepEqual(
+    combineSourceWords(snapshot.sources).map((word) => [
+      word.sourceIndex,
+      word.word,
+      word.meaning,
+      word.example,
+    ]),
+    [
+      [0, 'shared', '第一义', ''],
+      [2, 'shared', '', 'An example.'],
+      [3, 'hola', '', 'Otro.'],
+    ],
+  );
+  assert.equal(allDrawWords(ui).length, 3);
+  assert.match(ui.$('#position').textContent, /\/ 3$/);
+  assert.equal(ui.getMappingCalls(), 2);
+});
+
+void test('追加保留旧星标和当前造句，新词可参与洗牌与重新抽词', async () => {
+  const ui = createUI();
+  await ui.upload('word,meaning\none,一\n,跳过', 'first.csv');
+  ui.$('#cardStar').click();
+  const draft = ui.$('[data-answer="0"]');
+  draft.value = 'One sentence.';
+  draft.listeners.input();
+  ui.$('#importMode').value = 'append';
+  await ui.uploadFiles([
+    csvFile('second.csv', 'palabra,ejemplo\ndos,Two.'),
+    csvFile('third.csv', 'word\nthree'),
+  ]);
+  assert.equal(ui.$('#count').textContent, '3 个单词');
+  assert.match(ui.$('#drawGrid').innerHTML, /One sentence\./);
+  assert.deepEqual(plain(ui.studyApp.capture().starred), [0]);
+  assert.equal(ui.$('#sourceSelect').value, '1');
+  assert.deepEqual(
+    allDrawWords(ui)
+      .map((field) => Number(field.dataset.answer))
+      .sort((a, b) => a - b),
+    [0, 2, 3],
+  );
+});
+
+void test('追加模式首次导入不混入示例；替换模式清除上一批词表和星标', async () => {
+  const ui = createUI();
+  ui.$('#importMode').value = 'append';
+  await ui.upload('word\none');
+  assert.equal(ui.$('#count').textContent, '1 个单词');
+  ui.$('#cardStar').click();
+  ui.$('#importMode').value = 'replace';
+  await ui.uploadFiles([
+    csvFile('a.csv', 'word\na'),
+    csvFile('b.csv', 'word\nb'),
+  ]);
+  assert.equal(ui.$('#count').textContent, '2 个单词');
+  assert.deepEqual(plain(ui.studyApp.capture().starred), []);
+});
+
+void test('多 CSV 单独设置可选字段，不影响另一文件的卡片答案', async () => {
+  const ui = createUI();
+  await ui.uploadFiles([
+    csvFile('a.csv', 'word,meaning\na,first'),
+    csvFile('b.csv', 'word,example\nb,second'),
+  ]);
+  selectSource(ui, 1);
+  assert.equal(ui.document.querySelector('#map-meaning'), null);
+  assert(ui.document.querySelector('#map-example'));
+  const checkbox = ui.$('[data-include="example"]');
+  checkbox.checked = false;
+  checkbox.listeners.change();
+  selectSource(ui, 0);
+  assert(ui.document.querySelector('#map-meaning'));
+  const checked = validateSnapshot(plain(ui.studyApp.capture()));
+  assert.equal(checked.words[0].meaning, 'first');
+  assert.equal(checked.words[1].example, '');
+  // The settings selector must not be used to decide which fields a card has.
+  selectSource(ui, 1);
+  for (let i = 0; i < 2; i++) {
+    ui.$('#flip').click();
+    if (ui.$('#card').innerHTML.includes('>a</span>'))
+      assert.match(ui.$('#card').innerHTML, /first/);
+    else assert.doesNotMatch(ui.$('#card').innerHTML, /second/);
+    ui.$('#next').click();
+  }
+});
+
+void test('更换一份 CSV 的单词列，不移动其他文件星标与原始行号', async () => {
+  const ui = createUI();
+  await ui.uploadFiles([
+    csvFile('a.csv', 'word,alternate\na,new\n,extra'),
+    csvFile('b.csv', 'word\nb'),
+  ]);
+  allDrawWords(ui);
+  ui.document
+    .querySelectorAll('[data-star]')
+    .forEach((button) => button.click());
+  const select = ui.$('#map-word');
+  select.value = '1';
+  select.listeners.change({ target: select });
+  assert.equal(ui.$('#count').textContent, '3 个单词');
+  assert.deepEqual(plain(ui.studyApp.capture().starred), [2]);
+});
+
+void test('任一 CSV 无效时整批取消，追加和替换都保留原始练习', async () => {
+  for (const mode of ['replace', 'append']) {
+    const ui = createUI();
+    await ui.upload('word\nold');
+    ui.$('#cardStar').click();
+    const draft = ui.$('[data-answer="0"]');
+    draft.value = 'Do not lose this.';
+    draft.listeners.input();
+    const before = plain(ui.studyApp.capture());
+    ui.$('#importMode').value = mode;
+    await ui.uploadFiles([
+      csvFile('good.csv', 'word\ngood'),
+      csvFile('bad.csv', 'word\n"broken'),
+    ]);
+    assert.deepEqual(plain(ui.studyApp.capture()), before);
+    assert.match(ui.$('#message').textContent, /bad.csv/);
+    assert.equal(ui.$('[data-answer="0"]'), draft);
+    assert.equal(draft.value, 'Do not lose this.');
+    ui.language('es');
+    assert.match(ui.$('#message').textContent, /bad.csv:.*sin cerrar/);
+  }
+});
+
+void test('拖放处理整批文件，多个相同文件名不会互相覆盖', async () => {
+  const ui = createUI();
+  ui.$('#drop').listeners.drop({
+    preventDefault() {},
+    dataTransfer: {
+      files: [csvFile('same.csv', 'word\na'), csvFile('same.csv', 'word\nb')],
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(ui.$('#count').textContent, '2 个单词');
+  assert.equal(ui.studyApp.capture().sources.length, 2);
+});
+
+void test('多文件星标分别导出原始 CSV，包含重复表头、原始空格和未映射列', async () => {
+  const ui = createUI();
+  await ui.uploadFiles([
+    csvFile('same.csv', 'word,notes,notes\n first ,"a,b", second \n,skip,no'),
+    csvFile('same.csv', 'ejemplo,palabra,other\n"a\nb",second,"""quoted"""'),
+  ]);
+  allDrawWords(ui);
+  ui.document
+    .querySelectorAll('[data-star]')
+    .forEach((button) => button.click());
+  ui.$('#exportBtn').click();
+  assert.equal(ui.$('#exportSources').classList.contains('hide'), false);
+  ui.$('[data-export-source="0"]').click();
+  ui.$('[data-export-source="1"]').click();
+  assert.equal(ui.blobs.length, 2);
+  assert.deepEqual(parseCSV(await ui.blobs[0].text()), [
+    ['word', 'notes', 'notes'],
+    [' first ', 'a,b', ' second '],
+  ]);
+  assert.deepEqual(parseCSV(await ui.blobs[1].text()), [
+    ['ejemplo', 'palabra', 'other'],
+    ['a\nb', 'second', '"quoted"'],
+  ]);
+  assert.notEqual(
+    ui.document.body.children[0].download,
+    ui.document.body.children[1].download,
+  );
+  ui.$('#exportBtn').click();
+  assert.equal(ui.$('#exportSources').classList.contains('hide'), true);
+});
+
+void test('合并词库限制总行数、总大小与文件数；超限不部分导入', async () => {
+  const ui = createUI();
+  const before = plain(ui.studyApp.capture());
+  await ui.uploadFiles(
+    Array.from({ length: MAX_CSV_SOURCES + 1 }, () =>
+      csvFile('a.csv', 'word\na'),
+    ),
+  );
+  assert.match(ui.$('#message').textContent, /20 份/);
+  assert.deepEqual(plain(ui.studyApp.capture()), before);
+  await ui.uploadFiles(
+    Array.from({ length: 3 }, () => ({
+      name: 'big.csv',
+      size: MAX_IMPORT_BYTES / 2,
+      text: async () => {
+        throw new Error('must not read');
+      },
+    })),
+  );
+  assert.match(ui.$('#message').textContent, /10 MB/);
+  await ui.uploadFiles([
+    csvFile('full.csv', 'word\n' + 'a\n'.repeat(MAX_CSV_ROWS)),
+    csvFile('extra.csv', 'word\nextra'),
+  ]);
+  assert.match(ui.$('#message').textContent, /20,000/);
+  assert.deepEqual(plain(ui.studyApp.capture()), before);
+});
+
+void test('较旧的多文件读取不会覆盖新导入；读取中切换模式不改变原选择', async () => {
+  const ui = createUI();
+  await ui.upload('word\nbase');
+  ui.$('#importMode').value = 'append';
+  let finish;
+  await ui.uploadFiles([
+    {
+      name: 'slow.csv',
+      size: 10,
+      text: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    },
+  ]);
+  ui.$('#importMode').value = 'replace';
+  finish('word\nappend');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(ui.$('#count').textContent, '2 个单词');
+  await ui.uploadFiles([
+    csvFile('fast.csv', 'word\nfast'),
+    {
+      name: 'slow.csv',
+      size: 10,
+      text: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    },
+  ]);
+  await ui.upload('word\nnewest');
+  finish('word\nold');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(ui.$('#count').textContent, '1 个单词');
+  assert.match(ui.$('#card').innerHTML, /newest/);
+});
+
+void test('恶意文件名安全显示，三语切换和非法来源选择不改变词库', async () => {
+  const ui = createUI();
+  await ui.uploadFiles([
+    csvFile('<img src=x onerror=alert(1)>.csv', 'word\na'),
+    csvFile('b.csv', 'word\nb'),
+  ]);
+  assert.doesNotMatch(ui.$('#sourceSelect').innerHTML, /<img/);
+  const before = plain(ui.studyApp.capture());
+  selectSource(ui, 99);
+  assert.equal(ui.$('#sourceSelect').value, '0');
+  ui.language('en');
+  assert.equal(ui.$('#appendLists').textContent, 'Append lists');
+  ui.language('es');
+  assert.equal(ui.$('#appendLists').textContent, 'Añadir listas');
+  assert.deepEqual(plain(ui.studyApp.capture()), before);
+});
 
 void test('CSV 单元格边界：空文件、尾随分隔符、混合换行和连续引号', () => {
   for (const blank of ['', '\uFEFF', '\r\n', ',,', '""', '" \r\n "']) {
@@ -413,7 +704,7 @@ function cloudUI(options = {}) {
         id,
         revision: crypto.randomUUID(),
         name: snapshot.name,
-        wordCount: snapshot.rows.length,
+        wordCount: validateSnapshot(snapshot).words.length,
         updatedAt: Date.now(),
       };
       rows.set(id, {
@@ -451,6 +742,95 @@ function cloudUI(options = {}) {
     getSaves: () => saves,
   };
 }
+
+void test('合并词库云端保存恢复独立映射、原始行和星标；旧词库仍可打开', async () => {
+  const ui = cloudUI();
+  await ui.uploadFiles([
+    csvFile('a.csv', 'word,meaning,notes\na, 一 ,raw\n,skip,no'),
+    csvFile('b.csv', 'ejemplo,palabra\nExample.,b'),
+  ]);
+  allDrawWords(ui);
+  ui.$('[data-star="2"]').click();
+  const before = plain(ui.studyApp.capture());
+  await ui.$('#cloudCreate').click();
+  await ui.$('#cloudSave').click();
+  const entry = [...ui.rows.values()][0];
+  assert.equal(entry.wordCount, 2);
+  assert.deepEqual(entry.snapshot, before);
+  await ui.upload('word\nlocal');
+  ui.$('#cloudSelect').value = entry.id;
+  await ui.$('#cloudLoad').click();
+  assert.deepEqual(plain(ui.studyApp.capture()), before);
+  assert.equal(ui.$('#count').textContent, '2 个单词');
+  assert.equal(ui.$('#exportBtn').textContent, '导出星标（1）');
+  selectSource(ui, 1);
+  assert(ui.document.querySelector('#map-example'));
+  assert.equal(ui.document.querySelector('#map-meaning'), null);
+  const checkbox = ui.$('[data-include="example"]');
+  checkbox.checked = false;
+  checkbox.listeners.change();
+  await ui.$('#cloudSave').click();
+  assert.equal(ui.rows.size, 1);
+  assert.equal(ui.rows.get(entry.id).snapshot.sources[1].mapping.example, null);
+  // Restoring a v1 snapshot after a multi-file snapshot clears all extra sources.
+  const legacy = {
+    schemaVersion: 1,
+    name: 'legacy.csv',
+    headers: ['word'],
+    rows: [['legacy']],
+    mapping: { word: 0, meaning: null, example: null, phrase: null },
+    starred: [0],
+  };
+  ui.studyApp.restore(validateSnapshot(legacy));
+  assert.deepEqual(plain(ui.studyApp.capture()), legacy);
+  assert.equal(ui.$('#sourceSettings').classList.contains('hide'), true);
+});
+
+void test('从云端打开后追加另一个 CSV，另存新词库而不覆盖原副本', async () => {
+  const ui = cloudUI();
+  await ui.upload('word\nfirst');
+  await ui.$('#cloudCreate').click();
+  await ui.$('#cloudSave').click();
+  const original = [...ui.rows.values()][0];
+  ui.$('#importMode').value = 'append';
+  await ui.upload('word\nsecond');
+  await ui.$('#cloudSave').click();
+  assert.equal(ui.rows.size, 2);
+  assert.equal(ui.rows.get(original.id).snapshot.schemaVersion, 1);
+  assert.equal(
+    [...ui.rows.values()].find((entry) => entry.id !== original.id).snapshot
+      .sources.length,
+    2,
+  );
+});
+
+void test('CSV 读取完成也标记本地变动，阻止进行中的云端打开覆盖新词库', async () => {
+  const ui = cloudUI();
+  await ui.$('#cloudCreate').click();
+  await ui.$('#cloudSave').click();
+  ui.$('#cloudSelect').value = [...ui.rows.keys()][0];
+  let finishCSV, finishCloud;
+  await ui.uploadFile({
+    name: 'slow.csv',
+    size: 10,
+    text: () =>
+      new Promise((resolve) => {
+        finishCSV = resolve;
+      }),
+  });
+  const load = ui.api.load;
+  ui.api.load = (id) =>
+    new Promise((resolve) => {
+      finishCloud = async () => resolve(await load(id));
+    });
+  const pending = ui.$('#cloudLoad').click();
+  finishCSV('word\nnew');
+  await new Promise((resolve) => setImmediate(resolve));
+  await finishCloud();
+  await pending;
+  assert.equal(ui.$('#count').textContent, '1 个单词');
+  assert.match(ui.$('#card').innerHTML, />new</);
+});
 
 void test('云端三语文案完整，切换语言不影响原页面', () => {
   assert.deepEqual(

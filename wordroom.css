@@ -286,6 +286,7 @@ h2 {
   overflow-wrap: anywhere;
 }
 .field select,
+.import-options select,
 input[type='number'] {
   width: 100%;
   min-width: 0;
@@ -755,4 +756,31 @@ input[type='number'] {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+.import-options {
+  display: grid;
+  gap: 8px;
+  margin-block: 14px;
+  min-width: 0;
+}
+.import-options p {
+  margin: 0;
+}
+.export-sources {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.export-sources p {
+  margin: 0;
+}
+.export-sources .btn {
+  text-align: left;
+  justify-content: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }

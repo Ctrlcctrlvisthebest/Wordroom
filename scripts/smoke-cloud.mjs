@@ -40,7 +40,37 @@ try {
   );
   await assert.rejects(first.save(id, snapshot, original.revision), /conflict/);
   assert.deepEqual((await first.load(id)).validated.snapshot.starred, [10]);
-  await first.delete(changed);
+  const combined = {
+    schemaVersion: 2,
+    name: 'Synthetic combined library',
+    sources: [
+      {
+        name: 'one.csv',
+        headers: ['word', 'meaning'],
+        rows: [
+          ['same', ' 一 '],
+          ['', 'skip'],
+        ],
+        mapping: { word: 0, meaning: 1, example: null, phrase: null },
+      },
+      {
+        name: 'two.csv',
+        headers: ['ejemplo', 'palabra', 'unused'],
+        rows: [['Line one\nLine two', 'same', 'raw']],
+        mapping: { word: 1, meaning: null, example: 0, phrase: null },
+      },
+    ],
+    starred: [2],
+  };
+  const merged = await first.save(id, combined, changed.revision);
+  const restored = (await second.load(id)).validated;
+  assert.deepEqual(restored.snapshot, combined);
+  assert.equal(merged.wordCount, 2);
+  assert.deepEqual(
+    restored.words.map((word) => word.sourceIndex),
+    [0, 2],
+  );
+  await first.delete(merged);
   assert.deepEqual(await second.list(), []);
   console.log(
     JSON.stringify({
@@ -48,6 +78,7 @@ try {
       wordCount: 20000,
       bytes: original.bytes,
       roundTrip: true,
+      multiCSVRoundTrip: true,
       isolation: true,
       conflictProtection: true,
       deletion: true,

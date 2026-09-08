@@ -2,7 +2,7 @@ import {
   MAX_CLOUD_BYTES,
   validateSnapshot,
   validSyncCode,
-} from './cloud-data.js';
+} from './cloud-data.js?v=multi1';
 
 export class CloudClient {
   constructor(baseURL, code, fetcher = globalThis.fetch) {

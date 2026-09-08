@@ -12,7 +12,7 @@
     />
     <title>词间 · Wordroom</title>
     <meta name="description" content="导入 CSV 词表，随机翻卡与抽词造句。" />
-    <link rel="stylesheet" href="./wordroom.css" />
+    <link rel="stylesheet" href="./wordroom.css?v=multi1" />
     <link rel="stylesheet" href="./feedback.css" />
     <link rel="stylesheet" href="./wordroom-cloud.css" />
   </head>
@@ -71,18 +71,34 @@
           <div class="library-content">
             <section class="panel">
               <h2 id="importTitle">导入词表</h2>
+              <div class="import-options">
+                <label id="importModeLabel" for="importMode">导入方式</label>
+                <select id="importMode" aria-describedby="importModeHint">
+                  <option id="replaceLists" value="replace">替换词库</option>
+                  <option id="appendLists" value="append">追加词表</option>
+                </select>
+                <p id="importModeHint" class="muted">
+                  追加会保留现有词表和星标；示例词库会自动替换。
+                </p>
+              </div>
               <button id="drop" class="drop" type="button">
                 <span class="upload-icon" aria-hidden="true"
                   ><svg viewBox="0 0 24 24">
                     <path
                       d="M12 16V3m-5 5 5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"
                     /></svg></span
-                ><strong id="dropTitle">拖入 CSV 文件</strong
+                ><strong id="dropTitle">拖入一个或多个 CSV</strong
                 ><span id="dropHint" class="muted"
-                  >或点击选择 · 首行为列名 · 最大 5 MB</span
+                  >或点击多选 · 首行为列名 · 每个最大 5 MB</span
                 >
               </button>
-              <input id="fileInput" type="file" accept=".csv,text/csv" hidden />
+              <input
+                id="fileInput"
+                type="file"
+                accept=".csv,text/csv"
+                multiple
+                hidden
+              />
               <div id="filename" class="file">✓ 示例词库.csv</div>
               <p
                 id="message"
@@ -93,6 +109,18 @@
             </section>
             <section class="panel">
               <h2 id="csvContents">CSV 里有什么？</h2>
+              <div id="sourceSettings" class="import-options hide">
+                <label id="sourceLabel" for="sourceSelect"
+                  >设置这份 CSV 的列</label
+                >
+                <select
+                  id="sourceSelect"
+                  aria-describedby="sourcesHint"
+                ></select>
+                <p id="sourcesHint" class="muted">
+                  所有词表一起背；此处切换只修改对应文件的列设置。
+                </p>
+              </div>
               <p id="mappingHint" class="muted">
                 勾选文件包含的内容，再指定对应列。单词为必选。
               </p>
@@ -249,10 +277,13 @@
             class="btn alt export-btn"
             type="button"
             disabled
+            aria-controls="exportSources"
+            aria-expanded="false"
           >
             导出星标（0）
           </button>
         </div>
+        <div id="exportSources" class="export-sources hide"></div>
         <div id="cardsView">
           <div class="workspace-heading">
             <div>
@@ -360,7 +391,7 @@
         <span>Found a bug or have an idea?</span>
       </div>
     </div>
-    <script type="module" src="./wordroom.js?v=cloud1"></script>
-    <script type="module" src="./wordroom-cloud.js"></script>
+    <script type="module" src="./wordroom.js?v=multi1"></script>
+    <script type="module" src="./wordroom-cloud.js?v=multi1"></script>
   </body>
 </html>

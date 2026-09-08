@@ -3,6 +3,8 @@ export const OPTIONAL_FIELDS = FIELDS.slice(1);
 export const MAX_CSV_BYTES = 5 * 1024 * 1024;
 export const MAX_CSV_ROWS = 20000;
 export const MAX_CSV_COLUMNS = 100;
+export const MAX_CSV_SOURCES = 20;
+export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 const DRAW_PAGE_SIZE = 12;
 export const SUPPORTED_LOCALES = ['zh', 'en', 'es'];
 export const TRANSLATIONS = {
@@ -14,7 +16,7 @@ export const TRANSLATIONS = {
     pagePosition: '第 {page} / {total} 页',
     errorMalformedCSV:
       'CSV 引号格式有误：含引号的单元格需整体用双引号包围，内部双引号写成两个。',
-    errorTooManyRows: '词表超过 20,000 行，请拆分后导入。',
+    errorTooManyRows: '合并后的词库最多 20,000 行，请减少词表或行数。',
     errorTooManyColumns: 'CSV 超过 100 列，请删除不需要的列后导入。',
     errorInvalidMapping: '请选择有效且未被其他字段占用的列。',
     errorExport: '无法导出文件，请重试或换用支持文件下载的浏览器。',
@@ -25,8 +27,19 @@ export const TRANSLATIONS = {
     wordCount: '{count} 个单词',
     exportStarred: '导出星标（{count}）',
     importList: '导入词表',
-    dropTitle: '拖入 CSV 文件',
-    dropHint: '或点击选择 · 首行为列名 · 最大 5 MB',
+    dropTitle: '拖入一个或多个 CSV',
+    dropHint: '或点击多选 · 首行为列名 · 每个最大 5 MB',
+    importMode: '导入方式',
+    replaceLists: '替换词库',
+    appendLists: '追加词表',
+    importModeHint: '追加会保留现有词表和星标；示例词库会自动替换。',
+    sourceLabel: '设置这份 CSV 的列',
+    sourcesHint: '所有词表一起背；此处切换只修改对应文件的列设置。',
+    mergedFile: '合并词库（{count} 份 CSV）',
+    errorTooManyFiles: '一个词库最多包含 20 份 CSV。',
+    errorImportTooLarge: '合并后的词库超过 10 MB，请减少文件后重试。',
+    fileError: '{file}：{error}（本次导入未生效，原词库保持不变）',
+    exportSourcesHint: '点击文件分别导出星标，保留各自的原始列。',
     sampleFile: '示例词库.csv',
     loaded: '已载入',
     csvContents: 'CSV 里有什么？',
@@ -82,7 +95,7 @@ export const TRANSLATIONS = {
     errorMalformedCSV:
       'Invalid CSV quotes. Enclose quoted cells in double quotes and double any quotes inside them.',
     errorTooManyRows:
-      'The list exceeds 20,000 rows. Split it into smaller files.',
+      'The combined library exceeds 20,000 rows. Use fewer lists or rows.',
     errorTooManyColumns:
       'The CSV exceeds 100 columns. Remove unused columns first.',
     errorInvalidMapping:
@@ -98,8 +111,23 @@ export const TRANSLATIONS = {
     wordCount: '{count} words',
     exportStarred: 'Export starred ({count})',
     importList: 'Import word list',
-    dropTitle: 'Drop a CSV file here',
-    dropHint: 'or click to choose · first row is headers · 5 MB max',
+    dropTitle: 'Drop one or more CSV files',
+    dropHint: 'or click to select multiple · headers first · 5 MB per file',
+    importMode: 'Import mode',
+    replaceLists: 'Replace library',
+    appendLists: 'Append lists',
+    importModeHint:
+      'Append keeps existing lists and stars. The sample is replaced automatically.',
+    sourceLabel: 'Set columns for this CSV',
+    sourcesHint:
+      'Study all lists together. Switching here only selects which file to configure.',
+    mergedFile: 'Combined library ({count} CSVs)',
+    errorTooManyFiles: 'A library can contain up to 20 CSV files.',
+    errorImportTooLarge: 'The combined library exceeds 10 MB. Try fewer files.',
+    fileError:
+      '{file}: {error} (Nothing was imported; your current library is unchanged.)',
+    exportSourcesHint:
+      'Choose each file to export its starred rows with the original columns.',
     sampleFile: 'Sample vocabulary.csv',
     loaded: 'Loaded',
     csvContents: "What's in the CSV?",
@@ -157,7 +185,7 @@ export const TRANSLATIONS = {
     errorMalformedCSV:
       'Comillas CSV no válidas. Encierra la celda entre comillas dobles y duplica las comillas interiores.',
     errorTooManyRows:
-      'La lista supera las 20.000 filas. Divídela en archivos más pequeños.',
+      'La biblioteca combinada supera las 20.000 filas. Usa menos listas o filas.',
     errorTooManyColumns:
       'El CSV supera las 100 columnas. Elimina las columnas innecesarias.',
     errorInvalidMapping:
@@ -173,9 +201,25 @@ export const TRANSLATIONS = {
     wordCount: '{count} palabras',
     exportStarred: 'Exportar favoritas ({count})',
     importList: 'Importar lista de palabras',
-    dropTitle: 'Suelta aquí un archivo CSV',
+    dropTitle: 'Suelta uno o varios archivos CSV',
     dropHint:
-      'o haz clic para elegir · primera fila: encabezados · máximo 5 MB',
+      'o haz clic para elegir varios · encabezados primero · 5 MB por archivo',
+    importMode: 'Modo de importación',
+    replaceLists: 'Reemplazar biblioteca',
+    appendLists: 'Añadir listas',
+    importModeHint:
+      'Añadir conserva las listas y favoritas. El ejemplo se reemplaza automáticamente.',
+    sourceLabel: 'Configurar las columnas de este CSV',
+    sourcesHint:
+      'Practica con todas las listas juntas. Aquí solo eliges qué archivo configurar.',
+    mergedFile: 'Biblioteca combinada ({count} CSV)',
+    errorTooManyFiles: 'Una biblioteca admite hasta 20 archivos CSV.',
+    errorImportTooLarge:
+      'La biblioteca combinada supera los 10 MB. Prueba con menos archivos.',
+    fileError:
+      '{file}: {error} (No se importó nada; tu biblioteca no ha cambiado.)',
+    exportSourcesHint:
+      'Elige cada archivo para exportar sus favoritas con las columnas originales.',
     sampleFile: 'Vocabulario de ejemplo.csv',
     loaded: 'Cargado',
     csvContents: '¿Qué contiene el CSV?',
@@ -418,6 +462,18 @@ export function createWords(rows, mapping) {
   return words;
 }
 
+// Global row indices use raw row counts, not valid-word counts: skipped rows
+// and repeated words must never shift another CSV's stars or sentence drafts.
+export function combineSourceWords(sources) {
+  let offset = 0;
+  return sources.flatMap((source) => {
+    const words = createWords(source.rows, source.mapping);
+    for (const word of words) word.sourceIndex += offset;
+    offset += source.rows.length;
+    return words;
+  });
+}
+
 export function serializeCSV(rows) {
   return rows
     .map((row) =>
@@ -492,23 +548,37 @@ function startApp() {
     changeId: 0,
     importId: 0,
     flipped: false,
-    headers: [...FIELDS],
     fileName: '示例词库.csv',
-    rows: SAMPLE_WORDS.map((item) => [
-      item.word,
-      item.meaning,
-      item.example,
-      item.phrase,
-    ]),
-    mapping: { word: 0, meaning: 1, example: 2, phrase: 3 },
+    sources: [
+      {
+        name: '示例词库.csv',
+        headers: [...FIELDS],
+        rows: SAMPLE_WORDS.map((item) => [
+          item.word,
+          item.meaning,
+          item.example,
+          item.phrase,
+        ]),
+        mapping: { word: 0, meaning: 1, example: 2, phrase: 3 },
+      },
+    ],
+    activeSource: 0,
+    exportOpen: false,
     locale: savedLocale,
     messageKey: '',
+    messageFile: '',
     isSample: true,
   };
   const t = (key, variables) => translate(state.locale, key, variables);
-  const showMessage = (key = '') => {
+  const activeSource = () => state.sources[state.activeSource];
+  const showMessage = (key = '', file = '') => {
     state.messageKey = key;
-    $('#message').textContent = key ? t(key) : '';
+    state.messageFile = file;
+    $('#message').textContent = key
+      ? file
+        ? t('fileError', { file, error: t(key) })
+        : t(key)
+      : '';
   };
 
   function syncControls() {
@@ -526,6 +596,10 @@ function startApp() {
     $('#exportBtn').disabled = count === 0;
     $('#exportBtn').textContent = t('exportStarred', { count });
     $('#exportBtn').setAttribute('aria-label', t('exportAria', { count }));
+    if (!count || state.sources.length === 1) state.exportOpen = false;
+    $('#exportBtn').setAttribute('aria-expanded', String(state.exportOpen));
+    $('#exportSources').classList.toggle('hide', !state.exportOpen);
+    if (state.exportOpen) renderExportSources();
   }
 
   function applyLanguage() {
@@ -545,6 +619,12 @@ function startApp() {
     $('#practiceNav').setAttribute('aria-label', t('practiceNav'));
     $('#dropTitle').textContent = t('dropTitle');
     $('#dropHint').textContent = t('dropHint');
+    $('#importModeLabel').textContent = t('importMode');
+    $('#replaceLists').textContent = t('replaceLists');
+    $('#appendLists').textContent = t('appendLists');
+    $('#importModeHint').textContent = t('importModeHint');
+    $('#sourceLabel').textContent = t('sourceLabel');
+    $('#sourcesHint').textContent = t('sourcesHint');
     $('#csvContents').textContent = t('csvContents');
     $('#mappingHint').textContent = t('mappingHint');
     $('#requiredWord').textContent = `${t('field_word')} (${t('required')})`;
@@ -567,8 +647,8 @@ function startApp() {
     $('#drawPagination').setAttribute('aria-label', t('drawPages'));
     $('#drawPagePrev').textContent = t('previous');
     $('#drawPageNext').textContent = t('next');
-    if (state.isSample) $('#filename').textContent = `✓ ${t('sampleFile')}`;
-    if (state.messageKey) $('#message').textContent = t(state.messageKey);
+    renderSources();
+    showMessage(state.messageKey, state.messageFile);
     syncControls();
     updateExportButton();
     renderMapping();
@@ -603,20 +683,53 @@ function startApp() {
     );
   }
 
-  function exportStarred() {
-    if (!state.starred.size) return;
+  function sourceStars(index) {
+    const offset = state.sources
+      .slice(0, index)
+      .reduce((sum, source) => sum + source.rows.length, 0);
+    return [...state.starred]
+      .filter(
+        (row) =>
+          row >= offset && row < offset + state.sources[index].rows.length,
+      )
+      .map((row) => row - offset);
+  }
+
+  function renderExportSources() {
+    $('#exportSources').innerHTML =
+      `<p class="muted">${t('exportSourcesHint')}</p>` +
+      state.sources
+        .map((source, index) => {
+          const count = sourceStars(index).length;
+          return count
+            ? `<button class="btn alt" type="button" data-export-source="${index}">${index + 1}. ${escapeHTML(source.name)} · ${t('exportStarred', { count })}</button>`
+            : '';
+        })
+        .join('');
+    document.querySelectorAll('[data-export-source]').forEach((button) => {
+      button.addEventListener('click', () =>
+        exportSource(Number(button.dataset.exportSource)),
+      );
+    });
+  }
+
+  function exportSource(index) {
+    const source = state.sources[index];
+    if (!source) return;
+    const stars = sourceStars(index);
+    if (!stars.length) return;
     let url, link;
     try {
-      const csv = createStarredCSV(state.headers, state.rows, state.starred);
+      const csv = createStarredCSV(source.headers, source.rows, stars);
       const blob = new Blob([`\uFEFF${csv}`], {
         type: 'text/csv;charset=utf-8',
       });
       url = URL.createObjectURL(blob);
       link = document.createElement('a');
-      const displayFileName = state.isSample ? t('sampleFile') : state.fileName;
+      const displayFileName = state.isSample ? t('sampleFile') : source.name;
       const baseName = displayFileName.replace(/\.csv$/i, '') || 'wordroom';
       link.href = url;
-      link.download = `${baseName}${t('starredSuffix')}.csv`;
+      link.download = `${state.sources.length > 1 ? `${index + 1}-` : ''}${baseName}${t('starredSuffix')}.csv`;
       document.body.appendChild(link);
       link.click();
     } catch {
@@ -633,7 +746,7 @@ function startApp() {
     state.flipped = false;
   }
 
-  function rebuildDeck(words, preservePractice = false) {
+  function rebuildDeck(words, preservePractice = false, preserveDraw = false) {
     // Optional-field changes keep word identities intact; fresh imports have
     // no stars. Only compare identities when a starred Word column changes.
     if (state.starred.size && !preservePractice) {
@@ -659,7 +772,8 @@ function startApp() {
       state.drawn = state.drawn.map((item) => bySource.get(item.sourceIndex));
     } else {
       resetDeck();
-      drawWords();
+      if (preserveDraw) renderDraw();
+      else drawWords();
     }
     syncControls();
     updateExportButton();
@@ -667,6 +781,7 @@ function startApp() {
   }
 
   function applyMapping(next) {
+    const source = activeSource();
     const columns = Object.values(next).filter((value) => value != null);
     if (
       !Number.isInteger(next.word) ||
@@ -674,7 +789,7 @@ function startApp() {
         (value) =>
           !Number.isInteger(value) ||
           value < 0 ||
-          value >= state.headers.length,
+          value >= source.headers.length,
       ) ||
       new Set(columns).size !== columns.length
     ) {
@@ -682,30 +797,54 @@ function startApp() {
       renderMapping();
       return;
     }
-    const words = createWords(state.rows, next);
-    if (!words.length) {
+    const sourceWords = createWords(source.rows, next);
+    if (!sourceWords.length) {
       showMessage('errorNoWords');
       renderMapping();
       return;
     }
-    const preservePractice = next.word === state.mapping.word;
+    const preservePractice = next.word === source.mapping.word;
     state.changeId++;
-    state.mapping = next;
+    source.mapping = next;
+    const offset = state.sources
+      .slice(0, state.activeSource)
+      .reduce((sum, item) => sum + item.rows.length, 0);
+    const end = offset + source.rows.length;
+    for (const word of sourceWords) word.sourceIndex += offset;
+    const words = [
+      ...state.words.filter((word) => word.sourceIndex < offset),
+      ...sourceWords,
+      ...state.words.filter((word) => word.sourceIndex >= end),
+    ];
     showMessage();
     renderMapping();
     rebuildDeck(words, preservePractice);
   }
 
+  function renderSources() {
+    $('#filename').textContent =
+      `✓ ${state.isSample ? t('sampleFile') : state.fileName}`;
+    $('#sourceSettings').classList.toggle('hide', state.sources.length < 2);
+    $('#sourceSelect').innerHTML = state.sources
+      .map(
+        (source, index) =>
+          `<option value="${index}">${index + 1}. ${escapeHTML(source.name)}</option>`,
+      )
+      .join('');
+    $('#sourceSelect').value = String(state.activeSource);
+  }
+
   function renderMapping() {
-    const activeFields = FIELDS.filter((field) => state.mapping[field] != null);
+    const { headers, mapping } = activeSource();
+    const activeFields = FIELDS.filter((field) => mapping[field] != null);
     const headerCounts = new Map();
-    state.headers.forEach((header) =>
+    headers.forEach((header) =>
       headerCounts.set(
         header.trim(),
         (headerCounts.get(header.trim()) || 0) + 1,
       ),
     );
-    const headerLabels = state.headers.map((header, index) => {
+    const headerLabels = headers.map((header, index) => {
       const name = header.trim();
       const column = t('column', { number: index + 1 });
       return !name
@@ -715,20 +854,20 @@ function startApp() {
           : name;
     });
     OPTIONAL_FIELDS.forEach((field) => {
-      $(`[data-include="${field}"]`).checked = state.mapping[field] != null;
+      $(`[data-include="${field}"]`).checked = mapping[field] != null;
     });
     $('#mapping').innerHTML = activeFields
       .map((field) => {
         const used = new Set(
           activeFields
             .filter((other) => other !== field)
-            .map((other) => state.mapping[other])
+            .map((other) => mapping[other])
             .filter(Number.isInteger),
         );
         const options = headerLabels
           .map(
             (header, index) =>
-              `<option value="${index}" ${state.mapping[field] === index ? 'selected' : ''} ${used.has(index) ? 'disabled' : ''}>${escapeHTML(header)}</option>`,
+              `<option value="${index}" ${mapping[field] === index ? 'selected' : ''} ${used.has(index) ? 'disabled' : ''}>${escapeHTML(header)}</option>`,
           )
           .join('');
         return `<div class="field"><label for="map-${field}">${t(`field_${field}`)}${field === 'word' ? ' *' : ''}</label><select id="map-${field}" data-field="${field}">${options}</select></div>`;
@@ -739,7 +878,7 @@ function startApp() {
         const field = select.dataset.field;
         if (!FIELDS.includes(field)) return;
         applyMapping({
-          ...state.mapping,
+          ...activeSource().mapping,
           [field]: select.value === '' ? NaN : Number(select.value),
         });
         $(`#map-${field}`)?.focus();
@@ -771,9 +910,7 @@ function startApp() {
     $('#card').disabled = false;
     let detail = `<span class="muted">${t('rememberFirst')}</span>`;
     if (state.flipped) {
-      const fields = OPTIONAL_FIELDS.filter(
-        (field) => state.mapping[field] != null && current[field],
-      );
+      const fields = OPTIONAL_FIELDS.filter((field) => current[field]);
       const answer = fields.length
         ? fields
             .map(
@@ -839,47 +976,95 @@ function startApp() {
     renderDraw();
   }
 
-  async function loadFile(file) {
-    if (!file) return;
+  async function loadFiles(selection) {
+    const files = Array.from(selection || []);
+    if (!files.length) return;
+    // Capture the import mode once, so changing the selector during a read
+    // cannot unexpectedly turn an append into a replacement.
+    const append = $('#importMode').value === 'append' && !state.isSample;
+    const baseSources = append ? state.sources : [];
     const loadId = ++state.loadId;
     state.changeId++;
     showMessage();
+    let readingFile = '';
     try {
-      if (file.size > MAX_CSV_BYTES) throw new Error('errorTooLarge');
-      if (!file.name.toLowerCase().endsWith('.csv'))
-        throw new Error('errorWrongType');
-      const text = await file.text();
-      if (loadId !== state.loadId) return;
-      const parsed = parseCSV(text);
-      if (parsed.length < 2) throw new Error('errorTooFewRows');
-      const rows = parsed.slice(1);
-      if (rows.some((row) => row.length > parsed[0].length))
-        throw new Error('errorColumnCount');
-      const mapping = detectMapping(parsed[0], null);
-      if (mapping.word == null) {
-        // An unlabeled leading column may be empty; prefer an unused column
-        // with data, but never substitute for an explicitly named empty Word column.
-        const used = new Set(Object.values(mapping));
-        const candidate = parsed[0].findIndex(
-          (_, index) =>
-            !used.has(index) &&
-            rows.some((row) => String(row[index] ?? '').trim()),
-        );
-        mapping.word = candidate < 0 ? null : candidate;
+      if (files.length + baseSources.length > MAX_CSV_SOURCES)
+        throw new Error('errorTooManyFiles');
+      // Read sequentially and bound the aggregate, rather than retain an
+      // unbounded Promise.all of large CSV strings in browser memory.
+      const baseBytes = baseSources.length
+        ? new Blob([JSON.stringify(baseSources)]).size
+        : 0;
+      let bytes = baseBytes;
+      for (const file of files) {
+        readingFile = file.name;
+        if (file.size > MAX_CSV_BYTES) throw new Error('errorTooLarge');
+        if (!file.name.toLowerCase().endsWith('.csv'))
+          throw new Error('errorWrongType');
+        bytes += file.size;
+        if (bytes > MAX_IMPORT_BYTES) throw new Error('errorImportTooLarge');
       }
-      const words = createWords(rows, mapping);
-      if (!words.length) throw new Error('errorNoWords');
-      // Commit only after validation; failed imports leave the current work intact.
-      state.headers = parsed[0];
-      state.rows = rows;
-      state.fileName = file.name;
+      let offset = baseSources.reduce(
+        (sum, source) => sum + source.rows.length,
+        0,
+      );
+      const sources = [...baseSources];
+      const importedWords = [];
+      bytes = baseBytes;
+      for (const file of files) {
+        readingFile = file.name;
+        const text = await file.text();
+        if (loadId !== state.loadId) return;
+        const parsed = parseCSV(text);
+        if (parsed.length < 2) throw new Error('errorTooFewRows');
+        const headers = parsed[0],
+          rows = parsed.slice(1);
+        if (rows.some((row) => row.length > headers.length))
+          throw new Error('errorColumnCount');
+        if (offset + rows.length > MAX_CSV_ROWS)
+          throw new Error('errorTooManyRows');
+        const mapping = detectMapping(headers, null);
+        if (mapping.word == null) {
+          const used = new Set(Object.values(mapping));
+          const candidate = headers.findIndex(
+            (_, index) =>
+              !used.has(index) &&
+              rows.some((row) => String(row[index] ?? '').trim()),
+          );
+          mapping.word = candidate < 0 ? null : candidate;
+        }
+        const words = createWords(rows, mapping);
+        if (!words.length) throw new Error('errorNoWords');
+        const source = {
+          name: file.name.slice(0, 200),
+          headers,
+          rows,
+          mapping,
+        };
+        bytes += new Blob([JSON.stringify(source)]).size;
+        if (bytes > MAX_IMPORT_BYTES) throw new Error('errorImportTooLarge');
+        for (const word of words) word.sourceIndex += offset;
+        importedWords.push(...words);
+        offset += rows.length;
+        sources.push(source);
+      }
+      // One atomic commit: a bad second CSV must never replace the library
+      // with just the first CSV, or clear existing stars and writing drafts.
+      const words = append ? [...state.words, ...importedWords] : importedWords;
+      state.sources = sources;
+      state.activeSource = baseSources.length;
+      state.fileName =
+        sources.length === 1
+          ? sources[0].name
+          : t('mergedFile', { count: sources.length });
       state.isSample = false;
+      state.changeId++;
       state.importId++;
-      state.starred.clear();
-      state.mapping = mapping;
-      $('#filename').textContent = `✓ ${file.name}`;
+      if (!append) state.starred.clear();
+      state.exportOpen = false;
+      renderSources();
       renderMapping();
-      rebuildDeck(words);
+      rebuildDeck(words, false, append);
       importListeners.forEach((listener) => listener());
     } catch (error) {
       if (loadId !== state.loadId) return;
@@ -889,7 +1074,7 @@ function startApp() {
           : error instanceof Error && error.message.startsWith('error')
             ? error.message
             : 'errorRead';
-      showMessage(errorKey);
+      showMessage(errorKey, readingFile);
     } finally {
       if (loadId === state.loadId) $('#fileInput').value = '';
     }
@@ -897,7 +1082,7 @@ function startApp() {
 
   $('#drop').addEventListener('click', () => $('#fileInput').click());
   $('#fileInput').addEventListener('change', (event) => {
-    void loadFile(event.target.files?.[0]);
+    void loadFiles(event.target.files);
   });
   $('#drop').addEventListener('dragover', (event) => {
     event.preventDefault();
@@ -909,7 +1094,20 @@ function startApp() {
   $('#drop').addEventListener('drop', (event) => {
     event.preventDefault();
     $('#drop').classList.remove('drag');
-    void loadFile(event.dataTransfer.files?.[0]);
+    void loadFiles(event.dataTransfer.files);
+  });
+  $('#sourceSelect').addEventListener('change', (event) => {
+    const index = Number(event.target.value);
+    if (
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= state.sources.length
+    ) {
+      $('#sourceSelect').value = String(state.activeSource);
+      return;
+    }
+    state.activeSource = index;
+    renderMapping();
   });
   const flip = () => {
     if (state.deck[state.index]) {
@@ -923,7 +1121,13 @@ function startApp() {
     const current = state.deck[state.index];
     if (current) toggleStar(current.sourceIndex);
   });
-  $('#exportBtn').addEventListener('click', exportStarred);
+  $('#exportBtn').addEventListener('click', () => {
+    if (state.sources.length === 1) exportSource(0);
+    else {
+      state.exportOpen = !state.exportOpen;
+      updateExportButton();
+    }
+  });
   $('#languageSelect').addEventListener('change', (event) => {
     const locale = event.target.value;
     if (!SUPPORTED_LOCALES.includes(locale)) return;
@@ -950,20 +1154,17 @@ function startApp() {
   document.querySelectorAll('[data-include]').forEach((checkbox) =>
     checkbox.addEventListener('change', () => {
       const field = checkbox.dataset.include;
+      const { headers, mapping } = activeSource();
       if (!OPTIONAL_FIELDS.includes(field)) return;
-      if (!checkbox.checked) applyMapping({ ...state.mapping, [field]: null });
+      if (!checkbox.checked) applyMapping({ ...mapping, [field]: null });
       else {
-        const used = new Set(
-          Object.values(state.mapping).filter(Number.isInteger),
-        );
-        const available = state.headers.findIndex(
-          (_, index) => !used.has(index),
-        );
+        const used = new Set(Object.values(mapping).filter(Number.isInteger));
+        const available = headers.findIndex((_, index) => !used.has(index));
         if (available < 0) {
           checkbox.checked = false;
           showMessage('errorNoColumn');
         } else {
-          applyMapping({ ...state.mapping, [field]: available });
+          applyMapping({ ...mapping, [field]: available });
         }
       }
     }),
@@ -1006,27 +1207,46 @@ function startApp() {
       importListeners.add(listener);
       return () => importListeners.delete(listener);
     },
-    capture: () => ({
-      schemaVersion: 1,
-      name: state.isSample ? t('sampleFile') : state.fileName,
-      headers: state.headers,
-      rows: state.rows,
-      mapping: { ...state.mapping },
-      starred: [...state.starred],
-    }),
+    capture: () => {
+      const sources = state.sources.map((source) => ({
+        ...source,
+        mapping: { ...source.mapping },
+      }));
+      const { headers, rows, mapping } = sources[0];
+      return {
+        ...(sources.length === 1
+          ? { schemaVersion: 1, headers, rows, mapping }
+          : { schemaVersion: 2, sources }),
+        name: state.isSample ? t('sampleFile') : state.fileName,
+        starred: [...state.starred],
+      };
+    },
     // Only accepts a snapshot already checked by the shared cloud validator.
     restore: ({ snapshot, words }) => {
       state.loadId++;
       state.changeId++;
       state.importId++;
-      state.headers = snapshot.headers;
-      state.rows = snapshot.rows;
+      state.sources =
+        snapshot.schemaVersion === 1
+          ? [
+              {
+                name: snapshot.name,
+                headers: snapshot.headers,
+                rows: snapshot.rows,
+                mapping: { ...snapshot.mapping },
+              },
+            ]
+          : snapshot.sources.map((source) => ({
+              ...source,
+              mapping: { ...source.mapping },
+            }));
+      state.activeSource = 0;
+      state.exportOpen = false;
       state.fileName = snapshot.name;
       state.isSample = false;
-      state.mapping = snapshot.mapping;
       state.starred.clear();
       showMessage();
-      $('#filename').textContent = `✓ ${snapshot.name}`;
+      renderSources();
       renderMapping();
       rebuildDeck(words);
       state.starred = new Set(snapshot.starred);

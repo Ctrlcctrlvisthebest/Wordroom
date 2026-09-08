@@ -109,6 +109,112 @@ void test('云端快照校验保留完整原始列并拒绝无效映射和星标
   for (const value of cases)
     assert.throws(() => validateSnapshot(value), /invalidSnapshot/);
 });
+const multiSnapshot = () => ({
+  schemaVersion: 2,
+  name: 'Combined library',
+  sources: [
+    {
+      name: 'one.csv',
+      headers: ['word', 'meaning', 'unused'],
+      rows: [
+        [' same ', ' 一 ', 'original'],
+        ['', 'skip', 'raw'],
+      ],
+      mapping: { word: 0, meaning: 1, example: null, phrase: null },
+    },
+    {
+      name: 'two.csv',
+      headers: ['ejemplo', 'palabra'],
+      rows: [['"same",\nagain', 'same']],
+      mapping: { word: 1, meaning: null, example: 0, phrase: null },
+    },
+  ],
+  starred: [2],
+});
+
+void test('多来源快照可跨设备存取，旧版快照兼容且词数不计空词行', async () => {
+  const code = newSyncCode(),
+    a = client(code),
+    b = client(code);
+  const id = crypto.randomUUID();
+  const saved = await a.save(id, multiSnapshot());
+  assert.equal(saved.wordCount, 2);
+  const loaded = await b.load(id);
+  assert.deepEqual(loaded.validated.snapshot, multiSnapshot());
+  assert.deepEqual(
+    loaded.validated.words.map((word) => [word.sourceIndex, word.word]),
+    [
+      [0, 'same'],
+      [2, 'same'],
+    ],
+  );
+  const legacy = await b.save(id, snapshot(), saved.revision);
+  assert.deepEqual((await a.load(id)).validated.snapshot, snapshot());
+  await b.delete(legacy);
+});
+
+void test('多来源快照拒绝异常文件、坏映射、空词表、错误星标和聚合超限', async () => {
+  const value = multiSnapshot();
+  const cases = [
+    { ...value, sources: [] },
+    { ...value, sources: [null] },
+    { ...value, sources: Array(21).fill(value.sources[0]) },
+    { ...value, sources: [{ ...value.sources[0], name: '' }] },
+    {
+      ...value,
+      sources: [
+        {
+          ...value.sources[0],
+          mapping: { word: 0, meaning: 0, example: null, phrase: null },
+        },
+      ],
+    },
+    {
+      ...value,
+      sources: [{ ...value.sources[0], rows: [['', 'only meaning']] }],
+    },
+    {
+      ...value,
+      sources: [{ ...value.sources[0], headers: Array(101).fill('word') }],
+    },
+    {
+      ...value,
+      sources: [
+        value.sources[0],
+        { ...value.sources[1], rows: Array(19999).fill(['example', 'word']) },
+      ],
+    },
+    { ...value, starred: [1] },
+    { ...value, starred: [2, 2] },
+    { ...value, starred: [3] },
+  ];
+  const code = newSyncCode();
+  for (const bad of cases) {
+    assert.throws(() => validateSnapshot(bad), /invalidSnapshot/);
+    const response = await request(code, '/' + crypto.randomUUID(), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'If-None-Match': '*' },
+      body: JSON.stringify(bad),
+    });
+    assert.equal(response.status, 400);
+  }
+  assert.deepEqual(await client(code).list(), []);
+  assert.throws(
+    () =>
+      validateSnapshot({
+        ...value,
+        sources: [
+          {
+            ...value.sources[0],
+            rows: [['word', 'x'.repeat(MAX_CLOUD_BYTES)]],
+          },
+        ],
+        starred: [],
+      }),
+    /cloudTooLarge/,
+  );
+});
+
 void test('鉴权、CORS、非缓存响应和协议限制', async () => {
   assert.equal((await request('bad')).status, 401);
   const rejected = await request(newSyncCode(), '', {
