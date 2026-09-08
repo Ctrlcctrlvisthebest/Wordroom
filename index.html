@@ -14,6 +14,7 @@
     <meta name="description" content="导入 CSV 词表，随机翻卡与抽词造句。" />
     <link rel="stylesheet" href="./wordroom.css" />
     <link rel="stylesheet" href="./feedback.css" />
+    <link rel="stylesheet" href="./wordroom-cloud.css" />
   </head>
   <body>
     <header class="site-header">
@@ -115,6 +116,128 @@
               </div>
               <div id="mapping"></div>
             </section>
+          </div>
+        </details>
+        <details id="cloudPanel" class="library-panel cloud-panel">
+          <summary>
+            <span data-cloud-text="title">云端词表</span
+            ><svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m8 10 4 4 4-4" />
+            </svg>
+          </summary>
+          <div class="library-content cloud-content">
+            <p class="muted" data-cloud-text="intro">
+              主动保存词表和星标；换设备后用同步码找回。不影响本地练习。
+            </p>
+            <label for="cloudCode" data-cloud-text="codeLabel"
+              >专属同步码</label
+            >
+            <input
+              id="cloudCode"
+              type="password"
+              maxlength="68"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+              aria-describedby="cloudPrivacy"
+            />
+            <p id="cloudPrivacy" class="muted" data-cloud-text="privacy">
+              同步码相当于密码。有它的人可以读写你的词表；丢失后无法找回，请妥善保管。
+            </p>
+            <div id="cloudConnectActions" class="cloud-actions">
+              <button
+                id="cloudConnect"
+                class="btn"
+                type="button"
+                data-cloud-text="connect"
+              >
+                连接
+              </button>
+              <button
+                id="cloudCreate"
+                class="btn alt"
+                type="button"
+                data-cloud-text="create"
+              >
+                创建同步码
+              </button>
+            </div>
+            <div id="cloudSessionActions" class="cloud-actions hide">
+              <button
+                id="cloudCopy"
+                class="btn alt"
+                type="button"
+                data-cloud-text="copy"
+              >
+                复制同步码
+              </button>
+              <button
+                id="cloudDisconnect"
+                class="btn alt"
+                type="button"
+                data-cloud-text="disconnect"
+              >
+                退出同步
+              </button>
+            </div>
+            <div id="cloudLibrary" class="cloud-stack hide">
+              <label for="cloudName" data-cloud-text="nameLabel"
+                >保存名称</label
+              >
+              <input id="cloudName" maxlength="200" type="text" />
+              <button
+                id="cloudSave"
+                class="btn"
+                type="button"
+                data-cloud-text="save"
+              >
+                保存当前词表
+              </button>
+              <p class="muted" data-cloud-text="saveHint">
+                从云端打开后保存会更新原词表；导入新 CSV
+                后保存会新增一份。造句草稿不上传。
+              </p>
+              <div class="cloud-list-heading">
+                <label for="cloudSelect" data-cloud-text="listLabel"
+                  >已保存的词表</label
+                ><button
+                  id="cloudRefresh"
+                  class="btn alt"
+                  type="button"
+                  data-cloud-text="refresh"
+                >
+                  刷新
+                </button>
+              </div>
+              <select id="cloudSelect"></select>
+              <div class="cloud-actions">
+                <button
+                  id="cloudLoad"
+                  class="btn alt"
+                  type="button"
+                  data-cloud-text="load"
+                >
+                  打开词表
+                </button>
+                <button
+                  id="cloudDelete"
+                  class="btn alt"
+                  type="button"
+                  data-cloud-text="delete"
+                >
+                  删除云端副本
+                </button>
+              </div>
+              <p class="muted" data-cloud-text="limits">
+                最多 20 份词表，共 40 MB。仅点击保存时上传。
+              </p>
+            </div>
+            <p
+              id="cloudStatus"
+              class="message"
+              role="status"
+              aria-live="polite"
+            ></p>
           </div>
         </details>
       </aside>
@@ -237,6 +360,7 @@
         <span>Found a bug or have an idea?</span>
       </div>
     </div>
-    <script type="module" src="./wordroom.js"></script>
+    <script type="module" src="./wordroom.js?v=cloud1"></script>
+    <script type="module" src="./wordroom-cloud.js"></script>
   </body>
 </html>

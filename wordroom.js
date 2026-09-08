@@ -471,6 +471,7 @@ export function escapeHTML(value) {
 
 function startApp() {
   const $ = (selector) => document.querySelector(selector);
+  const importListeners = new Set();
   const savedLocale = (() => {
     try {
       const value = localStorage.getItem('wordroom-language');
@@ -488,6 +489,8 @@ function startApp() {
     index: 0,
     drawPage: 0,
     loadId: 0,
+    changeId: 0,
+    importId: 0,
     flipped: false,
     headers: [...FIELDS],
     fileName: '示例词库.csv',
@@ -576,6 +579,7 @@ function startApp() {
   function toggleStar(sourceIndex) {
     const word = state.words.find((item) => item.sourceIndex === sourceIndex);
     if (!word) return;
+    state.changeId++;
     if (state.starred.has(sourceIndex)) state.starred.delete(sourceIndex);
     else state.starred.add(sourceIndex);
     updateExportButton();
@@ -685,6 +689,7 @@ function startApp() {
       return;
     }
     const preservePractice = next.word === state.mapping.word;
+    state.changeId++;
     state.mapping = next;
     showMessage();
     renderMapping();
@@ -819,6 +824,7 @@ function startApp() {
     });
     document.querySelectorAll('[data-answer]').forEach((textarea) =>
       textarea.addEventListener('input', () => {
+        state.changeId++;
         state.answers.set(Number(textarea.dataset.answer), textarea.value);
       }),
     );
@@ -836,6 +842,7 @@ function startApp() {
   async function loadFile(file) {
     if (!file) return;
     const loadId = ++state.loadId;
+    state.changeId++;
     showMessage();
     try {
       if (file.size > MAX_CSV_BYTES) throw new Error('errorTooLarge');
@@ -867,11 +874,13 @@ function startApp() {
       state.rows = rows;
       state.fileName = file.name;
       state.isSample = false;
+      state.importId++;
       state.starred.clear();
       state.mapping = mapping;
       $('#filename').textContent = `✓ ${file.name}`;
       renderMapping();
       rebuildDeck(words);
+      importListeners.forEach((listener) => listener());
     } catch (error) {
       if (loadId !== state.loadId) return;
       const errorKey =
@@ -989,8 +998,47 @@ function startApp() {
     $('#libraryPanel').open = false;
   }
   applyLanguage();
+  return {
+    getLocale: () => state.locale,
+    getChangeId: () => state.changeId,
+    getImportId: () => state.importId,
+    onImport: (listener) => {
+      importListeners.add(listener);
+      return () => importListeners.delete(listener);
+    },
+    capture: () => ({
+      schemaVersion: 1,
+      name: state.isSample ? t('sampleFile') : state.fileName,
+      headers: state.headers,
+      rows: state.rows,
+      mapping: { ...state.mapping },
+      starred: [...state.starred],
+    }),
+    // Only accepts a snapshot already checked by the shared cloud validator.
+    restore: ({ snapshot, words }) => {
+      state.loadId++;
+      state.changeId++;
+      state.importId++;
+      state.headers = snapshot.headers;
+      state.rows = snapshot.rows;
+      state.fileName = snapshot.name;
+      state.isSample = false;
+      state.mapping = snapshot.mapping;
+      state.starred.clear();
+      showMessage();
+      $('#filename').textContent = `✓ ${snapshot.name}`;
+      renderMapping();
+      rebuildDeck(words);
+      state.starred = new Set(snapshot.starred);
+      updateExportButton();
+      renderCard();
+      renderDraw();
+      importListeners.forEach((listener) => listener());
+    },
+  };
 }
 
-if (typeof document !== 'undefined' && document.querySelector('#fileInput')) {
-  startApp();
-}
+export const studyApp =
+  typeof document !== 'undefined' && document.querySelector('#fileInput')
+    ? startApp()
+    : null;

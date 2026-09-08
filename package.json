@@ -11,7 +11,10 @@
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "lint:wordroom": "oxlint wordroom.js tests/wordroom.test.js",
-    "test": "node --test tests/wordroom.test.js",
+    "test": "node --test tests/*.test.js",
+    "dev:cloud": "wrangler dev --config server/wrangler.jsonc --port 8787",
+    "deploy:cloud": "wrangler deploy --config server/wrangler.jsonc",
+    "types:cloud": "wrangler types server/worker-configuration.d.ts --env-interface CloudEnv --include-runtime false --config server/wrangler.jsonc",
     "format": "oxfmt"
   },
   "dependencies": {

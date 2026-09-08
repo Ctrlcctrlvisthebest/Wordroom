@@ -1,0 +1,62 @@
+.cloud-panel {
+  margin-top: 16px;
+}
+.cloud-content,
+.cloud-stack {
+  display: grid;
+  gap: 12px;
+}
+.cloud-content label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.cloud-content input,
+.cloud-content select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 10px;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.cloud-content input[readonly] {
+  background: var(--background);
+}
+.cloud-content .btn {
+  font-size: 0.875rem;
+  min-height: 44px;
+  white-space: normal;
+}
+.cloud-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cloud-actions > .btn {
+  flex: 1 1 100px;
+}
+.cloud-stack {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.cloud-list-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.cloud-content .hide {
+  display: none;
+}
+#cloudStatus {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+#cloudStatus:empty {
+  display: none;
+}
+#cloudStatus[data-state='success'] {
+  color: var(--foreground);
+}
