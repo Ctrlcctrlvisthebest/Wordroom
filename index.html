@@ -15,7 +15,7 @@
     <link id="classicTheme" rel="stylesheet" href="./wordroom.css?v=ui1" />
     <link rel="stylesheet" href="./feedback.css" />
     <link rel="stylesheet" href="./wordroom-cloud.css" />
-    <link rel="stylesheet" href="./wordroom-music.css?v=1" />
+    <link rel="stylesheet" href="./wordroom-music.css?v=2" />
   </head>
   <body data-ui="classic">
     <header id="siteHeader" class="site-header">
@@ -301,11 +301,26 @@
             controls
             loop
             preload="none"
-            src="./audio/blue-hour-notes-v2.m4a"
+            src="./audio/study-continuous-v1.m4a"
             aria-labelledby="musicTitle musicTrack"
           >
             <span id="musicFallback">你的浏览器不支持音频播放。</span>
           </audio>
+          <div class="music-playlist">
+            <label id="musicSelectLabel" for="musicSelect">曲目</label>
+            <select id="musicSelect" aria-describedby="musicBlendHint">
+              <option value="0">蓝时笔记 · 第二版</option>
+            </select>
+            <div class="music-skip">
+              <button id="musicPrev" class="btn alt" type="button">
+                上一首
+              </button>
+              <button id="musicNext" class="btn alt" type="button">
+                下一首
+              </button>
+            </div>
+            <p id="musicBlendHint">8 首 · 顺序循环 · 柔和衔接</p>
+          </div>
           <p id="musicVolumeHint" class="music-volume-hint" hidden>
             请用设备的音量键调整音量。
           </p>
@@ -446,7 +461,7 @@
     </div>
     <script type="module" src="./wordroom.js?v=multi1"></script>
     <script type="module" src="./wordroom-ui.js?v=1"></script>
-    <script type="module" src="./wordroom-music.js?v=1"></script>
+    <script type="module" src="./wordroom-music.js?v=2"></script>
     <script type="module" src="./wordroom-cloud.js?v=multi1"></script>
   </body>
 </html>

@@ -1,0 +1,105 @@
+// Chapter cues for the loudness-matched, pre-rendered circular crossfade mix.
+export const PLAYLIST = {
+  src: './audio/study-continuous-v1.m4a',
+  duration: 1348.224,
+  crossfade: 3,
+  loopSwitchAt: 1346.724,
+  tracks: [
+    {
+      id: 'blue-hour-notes-v2',
+      original: 'blue-hour-notes-v2.m4a',
+      title: {
+        zh: '蓝时笔记 · 第二版',
+        en: 'Blue Hour Notes · v2',
+        es: 'Blue Hour Notes · v2',
+      },
+      start: 0,
+      switchAt: 0,
+      cue: 0,
+    },
+    {
+      id: '2f826f2d-73d0-4bc0-a789-07f3134ba848',
+      original: '2f826f2d-73d0-4bc0-a789-07f3134ba848.m4a',
+      title: {
+        zh: '曲目 02',
+        en: 'Track 02',
+        es: 'Pista 02',
+      },
+      start: 83.248,
+      switchAt: 84.748,
+      cue: 86.248,
+    },
+    {
+      id: '3de67668-be4a-44f7-92e8-520f5e7ae8d9',
+      original: '3de67668-be4a-44f7-92e8-520f5e7ae8d9.m4a',
+      title: {
+        zh: '曲目 03',
+        en: 'Track 03',
+        es: 'Pista 03',
+      },
+      start: 306.488,
+      switchAt: 307.988,
+      cue: 309.488,
+    },
+    {
+      id: '54086192-64e7-4abd-b7e8-0e3330d2d0c4',
+      original: '54086192-64e7-4abd-b7e8-0e3330d2d0c4.m4a',
+      title: {
+        zh: '曲目 04',
+        en: 'Track 04',
+        es: 'Pista 04',
+      },
+      start: 452.928,
+      switchAt: 454.428,
+      cue: 455.928,
+    },
+    {
+      id: '8983fdcb-de7c-4524-98fd-a30a8b409727',
+      original: '8983fdcb-de7c-4524-98fd-a30a8b409727.m4a',
+      title: {
+        zh: '曲目 05',
+        en: 'Track 05',
+        es: 'Pista 05',
+      },
+      start: 672.104,
+      switchAt: 673.604,
+      cue: 675.104,
+    },
+    {
+      id: 'c38946d1-1433-4d18-81e9-a9aeaade8953',
+      original: 'c38946d1-1433-4d18-81e9-a9aeaade8953.m4a',
+      title: {
+        zh: '曲目 06',
+        en: 'Track 06',
+        es: 'Pista 06',
+      },
+      start: 848.24,
+      switchAt: 849.74,
+      cue: 851.24,
+    },
+    {
+      id: 'dc832955-2613-4134-8259-d70c6066ae4c',
+      original: 'dc832955-2613-4134-8259-d70c6066ae4c.m4a',
+      title: {
+        zh: '曲目 07',
+        en: 'Track 07',
+        es: 'Pista 07',
+      },
+      start: 1023.512,
+      switchAt: 1025.012,
+      cue: 1026.512,
+    },
+    {
+      id: 'f88454bf-7c09-4e81-a1b6-e639171c0125',
+      original: 'f88454bf-7c09-4e81-a1b6-e639171c0125.m4a',
+      title: {
+        zh: '曲目 08',
+        en: 'Track 08',
+        es: 'Pista 08',
+      },
+      start: 1199.008,
+      switchAt: 1200.508,
+      cue: 1202.008,
+    },
+  ],
+};

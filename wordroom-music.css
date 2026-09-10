@@ -41,8 +41,39 @@
   outline-offset: 4px;
 }
 .music-volume-hint,
-.music-error {
+.music-error,
+.music-playlist {
   grid-column: 1 / -1;
+}
+.music-playlist {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.875rem;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.music-playlist select {
+  min-width: 0;
+  flex: 1 1 180px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--foreground);
+  background: var(--card);
+}
+.music-skip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.music-playlist p {
+  flex-basis: 100%;
+  color: var(--muted);
+  margin: 0;
 }
 .music-error {
   display: flex;

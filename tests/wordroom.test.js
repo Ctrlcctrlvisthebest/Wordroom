@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import vm from 'node:vm';
 import { startCloud, CLOUD_TEXT } from '../wordroom-cloud.js';
 import { startUI } from '../wordroom-ui.js';
-import { startMusic } from '../wordroom-music.js';
+import { startMusic, trackAtTime } from '../wordroom-music.js';
+import { PLAYLIST } from '../wordroom-playlist.js';
 import { newSyncCode, validateSnapshot } from '../cloud-data.js';
 import {
   TRANSLATIONS,
@@ -373,11 +374,13 @@ function createThemeUI(options) {
   return ui;
 }
 
-function attachMusic(ui, deviceVolume = false) {
+function attachMusic(ui, deviceVolume = false, options) {
   const audio = ui.$('#studyMusic');
   const calls = { play: 0, load: 0 };
   audio.paused = true;
   audio.currentTime = 0;
+  audio.duration = PLAYLIST.duration;
+  audio.readyState = 4;
   audio.play = async () => {
     calls.play++;
     audio.paused = false;
@@ -389,14 +392,14 @@ function attachMusic(ui, deviceVolume = false) {
   if (deviceVolume) {
     Object.defineProperty(audio, 'volume', { get: () => 1, set() {} });
   }
-  startMusic(ui.studyApp, ui.document);
+  startMusic(ui.studyApp, ui.document, options);
   return { audio, calls };
 }
 
-void test('BGM 使用第二版 AAC，默认关闭、按需加载、原生控制并循环', () => {
+void test('BGM 使用连续混音 AAC，默认关闭、按需加载、原生控制并循环', () => {
   const ui = createUI({ savedLocale: 'en' });
   const { audio, calls } = attachMusic(ui);
-  assert.equal(audio.attrs.src, './audio/blue-hour-notes-v2.m4a');
+  assert.equal(audio.attrs.src, PLAYLIST.src);
   assert.equal(audio.attrs.preload, 'none');
   assert(Object.hasOwn(audio.attrs, 'controls'));
   assert(Object.hasOwn(audio.attrs, 'loop'));
@@ -406,11 +409,212 @@ void test('BGM 使用第二版 AAC，默认关闭、按需加载、原生控制�
   assert.deepEqual(calls, { play: 0, load: 0 });
   assert.equal(ui.$('#musicTitle').textContent, 'Study music');
   assert.equal(ui.$('#musicError').hidden, true);
-  const file = readFileSync(
-    new URL('../audio/blue-hour-notes-v2.m4a', import.meta.url),
-  );
+  const file = readFileSync(new URL(`../${PLAYLIST.src}`, import.meta.url));
   assert.equal(file.subarray(4, 8).toString(), 'ftyp');
-  assert(file.length > 1_000_000 && file.length < 3_000_000);
+  assert(file.length > 1_000_000 && file.length < 40_000_000);
+  assert(
+    file.indexOf('moov') < file.indexOf('mdat'),
+    'Metadata precedes audio for streaming',
+  );
+});
+
+void test('播放列表覆盖 audio 全部原曲，章节有序且处于连续音轨范围内', () => {
+  const originals = readdirSync(new URL('../audio/', import.meta.url)).filter(
+    (name) =>
+      /\.(m4a|mp3|wav|ogg|opus)$/i.test(name) &&
+      name !== PLAYLIST.src.split('/').at(-1),
+  );
+  assert.deepEqual(
+    PLAYLIST.tracks.map((track) => track.original).sort(),
+    originals.sort(),
+  );
+  assert.equal(PLAYLIST.tracks.length, 8);
+  assert.equal(new Set(PLAYLIST.tracks.map((track) => track.id)).size, 8);
+  assert.equal(PLAYLIST.crossfade, 3);
+  for (const [index, track] of PLAYLIST.tracks.entries()) {
+    assert(track.start <= track.switchAt && track.switchAt <= track.cue);
+    assert(track.cue < PLAYLIST.duration);
+    for (const language of ['zh', 'en', 'es']) assert(track.title[language]);
+    if (index) {
+      assert(track.start > PLAYLIST.tracks[index - 1].cue);
+      assert.equal(track.cue - track.start, PLAYLIST.crossfade);
+    }
+  }
+});
+
+void test('连续播放的当前曲目在交叉淡化中点更新，最后一首平滑回到第一首', () => {
+  for (const invalid of [NaN, Infinity, -1, undefined])
+    assert.equal(trackAtTime(invalid), 0);
+  for (let index = 1; index < PLAYLIST.tracks.length; index++) {
+    const { switchAt } = PLAYLIST.tracks[index];
+    assert.equal(trackAtTime(switchAt - 0.01), index - 1);
+    assert.equal(trackAtTime(switchAt), index);
+  }
+  assert.equal(trackAtTime(PLAYLIST.loopSwitchAt - 0.01), 7);
+  assert.equal(trackAtTime(PLAYLIST.loopSwitchAt), 0);
+  assert.equal(trackAtTime(PLAYLIST.duration), 0);
+});
+
+void test('暂停时选曲不自动播放，未加载元数据时记住最后选择，不修改词表', async () => {
+  const ui = createUI();
+  const { audio, calls } = attachMusic(ui);
+  const before = plain(ui.studyApp.capture());
+  audio.readyState = 0;
+  await ui.$('#musicPrev').click();
+  assert.equal(ui.$('#musicSelect').value, '7');
+  assert.equal(audio.currentTime, 0);
+  assert.equal(calls.load, 1);
+  audio.networkState = 2;
+  await ui.$('#musicPrev').click();
+  assert.equal(calls.load, 1);
+  audio.readyState = 4;
+  audio.listeners.loadedmetadata();
+  assert.equal(audio.currentTime, PLAYLIST.tracks[6].cue);
+  assert.equal(audio.paused, true);
+  assert.equal(calls.play, 0);
+  ui.$('#musicSelect').value = '2';
+  await ui.$('#musicSelect').listeners.change();
+  assert.equal(audio.currentTime, PLAYLIST.tracks[2].cue);
+  for (const invalid of ['-1', '8', 'NaN', '1.5']) {
+    ui.$('#musicSelect').value = invalid;
+    await ui.$('#musicSelect').listeners.change();
+    assert.equal(ui.$('#musicSelect').value, '2');
+    assert.equal(audio.currentTime, PLAYLIST.tracks[2].cue);
+  }
+  assert.deepEqual(plain(ui.studyApp.capture()), before);
+});
+
+function musicFader() {
+  const ramps = [],
+    timers = new Map();
+  let timerId = 0,
+    creations = 0;
+  const context = {
+    currentTime: 10,
+    destination: {},
+    resume: async () => {},
+    createGain: () => ({
+      connect() {},
+      gain: {
+        cancelAndHoldAtTime() {},
+        linearRampToValueAtTime: (value, time) => ramps.push([value, time]),
+      },
+    }),
+    createMediaElementSource: () => ({ connect() {} }),
+  };
+  return {
+    ramps,
+    context,
+    getCreations: () => creations,
+    flush: () => {
+      const callbacks = [...timers.values()];
+      timers.clear();
+      callbacks.forEach((fn) => fn());
+    },
+    options: {
+      createContext: () => {
+        creations++;
+        return context;
+      },
+      schedule: (fn) => {
+        timers.set(++timerId, fn);
+        return timerId;
+      },
+      cancel: (id) => timers.delete(id),
+    },
+  };
+}
+
+void test('播放中切歌先淡出再跳转再淡入，不重新播放、不改用户音量', async () => {
+  const ui = createUI(),
+    fader = musicFader();
+  const { audio, calls } = attachMusic(ui, false, fader.options);
+  audio.paused = false;
+  audio.volume = 0.2;
+  audio.currentTime = 12;
+  assert.equal(fader.getCreations(), 0);
+  await ui.$('#musicNext').click();
+  assert.equal(audio.currentTime, 12);
+  assert.deepEqual(fader.ramps.at(-1), [0, 10.18]);
+  audio.listeners.playing();
+  assert.deepEqual(fader.ramps.at(-1), [0, 10.18]);
+  fader.flush();
+  assert.equal(audio.currentTime, PLAYLIST.tracks[1].cue);
+  audio.listeners.seeking();
+  audio.listeners.seeked();
+  assert.deepEqual(fader.ramps.at(-1), [1, 10.35]);
+  assert.equal(audio.volume, 0.2);
+  assert.equal(audio.attrs.src, PLAYLIST.src);
+  assert.deepEqual(calls, { play: 0, load: 0 });
+});
+
+void test('连续快速切歌只有最后一次生效，暂停不会被定时切歌自动恢复', async () => {
+  const ui = createUI(),
+    fader = musicFader();
+  let resume;
+  fader.context.resume = () =>
+    new Promise((resolve) => {
+      resume = resolve;
+    });
+  const { audio, calls } = attachMusic(ui, false, fader.options);
+  audio.paused = false;
+  const first = ui.$('#musicNext').click();
+  const second = ui.$('#musicNext').click();
+  resume();
+  await Promise.all([first, second]);
+  assert.equal(fader.getCreations(), 1);
+  assert.equal(fader.ramps.length, 1);
+  audio.paused = true;
+  audio.listeners.pause();
+  fader.flush();
+  assert.equal(audio.currentTime, PLAYLIST.tracks[2].cue);
+  assert.equal(audio.paused, true);
+  assert.equal(calls.play, 0);
+  assert.deepEqual(fader.ramps.at(-1), [1, 10.35]);
+});
+
+void test('手动拖动进度优先于尚未执行的切歌，自动换曲与三语标签同步', async () => {
+  const ui = createUI(),
+    fader = musicFader();
+  const { audio } = attachMusic(ui, false, fader.options);
+  audio.paused = false;
+  await ui.$('#musicNext').click();
+  audio.currentTime = PLAYLIST.tracks[4].cue;
+  audio.listeners.seeking();
+  fader.flush();
+  assert.equal(audio.currentTime, PLAYLIST.tracks[4].cue);
+  assert.equal(ui.$('#musicSelect').value, '4');
+  ui.language('es');
+  assert.equal(ui.$('#musicTrack').textContent, 'Pista 05');
+  assert.equal(ui.$('#musicNext').textContent, 'Siguiente');
+  audio.currentTime = PLAYLIST.tracks[6].switchAt;
+  audio.listeners.timeupdate();
+  assert.equal(ui.$('#musicSelect').value, '6');
+  assert.equal(ui.$('#musicTrack').textContent, 'Pista 07');
+  audio.currentTime = PLAYLIST.loopSwitchAt;
+  audio.listeners.timeupdate();
+  assert.equal(ui.$('#musicSelect').value, '0');
+});
+
+void test('不支持或拒绝 Web Audio 时仍可切歌，不影响连续音轨的自动衔接', async () => {
+  for (const createContext of [
+    () => null,
+    () => {
+      throw new Error('Unavailable');
+    },
+    () => ({
+      resume: async () => {
+        throw new Error('Not allowed');
+      },
+    }),
+  ]) {
+    const ui = createUI();
+    const { audio, calls } = attachMusic(ui, false, { createContext });
+    audio.paused = false;
+    await ui.$('#musicNext').click();
+    assert.equal(audio.currentTime, PLAYLIST.tracks[1].cue);
+    assert.deepEqual(calls, { play: 0, load: 0 });
+  }
 });
 
 void test('BGM 播放中切换 UI、语言和练习视图，不换音频节点或重置音量进度', async () => {
