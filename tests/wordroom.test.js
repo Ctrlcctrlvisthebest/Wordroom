@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { startCloud, CLOUD_TEXT } from '../wordroom-cloud.js';
 import { startUI } from '../wordroom-ui.js';
+import { startMusic } from '../wordroom-music.js';
 import { newSyncCode, validateSnapshot } from '../cloud-data.js';
 import {
   TRANSLATIONS,
@@ -371,6 +372,110 @@ function createThemeUI(options) {
   };
   return ui;
 }
+
+function attachMusic(ui, deviceVolume = false) {
+  const audio = ui.$('#studyMusic');
+  const calls = { play: 0, load: 0 };
+  audio.paused = true;
+  audio.currentTime = 0;
+  audio.play = async () => {
+    calls.play++;
+    audio.paused = false;
+    audio.listeners.playing();
+  };
+  audio.load = () => {
+    calls.load++;
+  };
+  if (deviceVolume) {
+    Object.defineProperty(audio, 'volume', { get: () => 1, set() {} });
+  }
+  startMusic(ui.studyApp, ui.document);
+  return { audio, calls };
+}
+
+void test('BGM 使用第二版 AAC，默认关闭、按需加载、原生控制并循环', () => {
+  const ui = createUI({ savedLocale: 'en' });
+  const { audio, calls } = attachMusic(ui);
+  assert.equal(audio.attrs.src, './audio/blue-hour-notes-v2.m4a');
+  assert.equal(audio.attrs.preload, 'none');
+  assert(Object.hasOwn(audio.attrs, 'controls'));
+  assert(Object.hasOwn(audio.attrs, 'loop'));
+  assert(!Object.hasOwn(audio.attrs, 'autoplay'));
+  assert.equal(audio.volume, 0.35);
+  assert.equal(audio.paused, true);
+  assert.deepEqual(calls, { play: 0, load: 0 });
+  assert.equal(ui.$('#musicTitle').textContent, 'Study music');
+  assert.equal(ui.$('#musicError').hidden, true);
+  const file = readFileSync(
+    new URL('../audio/blue-hour-notes-v2.m4a', import.meta.url),
+  );
+  assert.equal(file.subarray(4, 8).toString(), 'ftyp');
+  assert(file.length > 1_000_000 && file.length < 3_000_000);
+});
+
+void test('BGM 播放中切换 UI、语言和练习视图，不换音频节点或重置音量进度', async () => {
+  const ui = createThemeUI();
+  await ui.upload('word,meaning\nhello,你好');
+  const { audio, calls } = attachMusic(ui);
+  await audio.play();
+  audio.currentTime = 37.25;
+  audio.volume = 0.2;
+  const changeId = ui.studyApp.getChangeId();
+  const pending = ui.switchUI('p3r');
+  ui.document.head.children[0].onload();
+  await pending;
+  ui.$('#drawTab').click();
+  ui.language('es');
+  assert.equal(ui.$('#musicTitle').textContent, 'Música de estudio');
+  await ui.switchUI('classic');
+  ui.$('#cardsTab').click();
+  assert.equal(ui.$('#studyMusic'), audio);
+  assert.equal(audio.currentTime, 37.25);
+  assert.equal(audio.volume, 0.2);
+  assert.equal(audio.paused, false);
+  assert.deepEqual(calls, { play: 1, load: 0 });
+  assert.equal(ui.studyApp.getChangeId(), changeId);
+});
+
+void test('BGM 网络失败可重试，播放被拒绝不产生未处理异常，主动暂停不报错', async () => {
+  const ui = createUI();
+  const { audio, calls } = attachMusic(ui);
+  audio.listeners.error();
+  assert.equal(ui.$('#musicError').hidden, false);
+  ui.language('en');
+  assert.match(ui.$('#musicStatus').textContent, /Check your connection/);
+  const before = plain(ui.studyApp.capture());
+  await ui.$('#musicRetry').click();
+  assert.equal(ui.$('#musicError').hidden, true);
+  assert.deepEqual(calls, { play: 1, load: 1 });
+  audio.play = async () => {
+    throw new Error('Playback rejected');
+  };
+  audio.listeners.error();
+  await ui.$('#musicRetry').click();
+  assert.equal(ui.$('#musicError').hidden, false);
+  assert.equal(ui.$('#musicRetry').disabled, false);
+  audio.play = async () => {
+    throw Object.assign(new Error('Paused'), { name: 'AbortError' });
+  };
+  await ui.$('#musicRetry').click();
+  assert.equal(ui.$('#musicError').hidden, true);
+  assert.deepEqual(plain(ui.studyApp.capture()), before);
+});
+
+void test('设备接管音量时提示使用音量键，禁用本地存储不影响播放器', () => {
+  const ui = createUI({ mobile: true, storageBlocked: true });
+  const { audio, calls } = attachMusic(ui, true);
+  assert.equal(audio.volume, 1);
+  assert.equal(ui.$('#musicVolumeHint').hidden, false);
+  assert.match(ui.$('#musicVolumeHint').textContent, /音量键/);
+  ui.language('es');
+  assert.match(
+    ui.$('#musicVolumeHint').textContent,
+    /botones de tu dispositivo/,
+  );
+  assert.deepEqual(calls, { play: 0, load: 0 });
+});
 
 void test('界面默认经典版，不预加载 P3R，保留手机折叠状态和语言', () => {
   for (const [locale, label] of [

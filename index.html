@@ -15,6 +15,7 @@
     <link id="classicTheme" rel="stylesheet" href="./wordroom.css?v=ui1" />
     <link rel="stylesheet" href="./feedback.css" />
     <link rel="stylesheet" href="./wordroom-cloud.css" />
+    <link rel="stylesheet" href="./wordroom-music.css?v=1" />
   </head>
   <body data-ui="classic">
     <header id="siteHeader" class="site-header">
@@ -283,6 +284,38 @@
         </details>
       </aside>
       <section class="workspace">
+        <section class="music-panel" aria-labelledby="musicTitle">
+          <div class="music-info">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 18V5l11-2v13M9 8l11-2" />
+              <ellipse cx="6" cy="18" rx="3" ry="2" />
+              <ellipse cx="17" cy="16" rx="3" ry="2" />
+            </svg>
+            <div>
+              <h2 id="musicTitle">学习音乐</h2>
+              <p id="musicTrack">蓝时笔记 · 第二版</p>
+            </div>
+          </div>
+          <audio
+            id="studyMusic"
+            controls
+            loop
+            preload="none"
+            src="./audio/blue-hour-notes-v2.m4a"
+            aria-labelledby="musicTitle musicTrack"
+          >
+            <span id="musicFallback">你的浏览器不支持音频播放。</span>
+          </audio>
+          <p id="musicVolumeHint" class="music-volume-hint" hidden>
+            请用设备的音量键调整音量。
+          </p>
+          <div id="musicError" class="music-error" hidden>
+            <p id="musicStatus" role="status"></p>
+            <button id="musicRetry" class="btn alt" type="button">
+              重试播放
+            </button>
+          </div>
+        </section>
         <div class="library-bar">
           <div id="count" class="count">6 个单词</div>
           <button
@@ -413,6 +446,7 @@
     </div>
     <script type="module" src="./wordroom.js?v=multi1"></script>
     <script type="module" src="./wordroom-ui.js?v=1"></script>
+    <script type="module" src="./wordroom-music.js?v=1"></script>
     <script type="module" src="./wordroom-cloud.js?v=multi1"></script>
   </body>
 </html>
