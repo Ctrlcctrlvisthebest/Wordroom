@@ -1,25 +1,74 @@
-/* Shared tokens follow the active classic/P3R theme; native audio controls
-   handle seeking, play/pause, buffering and platform-specific volume controls. */
-.music-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+/* Music is a secondary utility, outside the study layout. The existing
+   feedback-space leaves a clear bottom row for both corner controls. */
+.music-widget {
+  position: fixed;
+  left: calc(1rem + env(safe-area-inset-left, 0px));
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  font-size: 0.875rem;
+}
+.music-widget > summary {
+  display: flex;
   align-items: center;
-  gap: 12px 20px;
-  margin-bottom: 24px;
-  padding: 12px 16px;
+  gap: 0.5rem;
+  width: max-content;
+  min-height: 44px;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--muted);
+  box-shadow: 0 2px 8px #173d3210;
+  cursor: pointer;
+  list-style: none;
+}
+.music-widget > summary::-webkit-details-marker {
+  display: none;
+}
+.music-widget > summary svg {
+  width: 16px;
+  height: 16px;
+}
+.music-widget > summary .music-chevron {
+  width: 12px;
+  height: 12px;
+}
+.music-widget[open] > summary .music-chevron {
+  transform: rotate(180deg);
+}
+.music-panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.625rem);
+  display: grid;
+  gap: 12px;
+  width: min(
+    340px,
+    calc(
+      100vw - 2rem - env(safe-area-inset-left, 0px) -
+        env(safe-area-inset-right, 0px)
+    )
+  );
+  max-height: calc(100vh - 7rem - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
   background: var(--card);
   color: var(--foreground);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: 0 8px 30px #0002;
+}
+.music-widget:not([open]) > .music-panel {
+  display: none;
 }
 .music-info {
   display: flex;
-  align-items: center;
+  justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
   min-width: 0;
-}
-.music-info > svg {
-  color: var(--primary);
 }
 .music-info h2 {
   margin: 0;
@@ -33,6 +82,21 @@
   font-size: 0.875rem;
   overflow-wrap: anywhere;
 }
+.music-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+}
 .music-panel audio {
   display: block;
   width: 100%;
@@ -40,25 +104,17 @@
   height: 44px;
   outline-offset: 4px;
 }
-.music-volume-hint,
-.music-error,
 .music-playlist {
-  grid-column: 1 / -1;
-}
-.music-playlist {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  gap: 8px;
   font-size: 0.875rem;
   border-top: 1px solid var(--border);
   padding-top: 12px;
 }
 .music-playlist select {
+  width: 100%;
   min-width: 0;
-  flex: 1 1 180px;
   min-height: 44px;
-  max-width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -70,8 +126,10 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.music-skip .btn {
+  flex: 1;
+}
 .music-playlist p {
-  flex-basis: 100%;
   color: var(--muted);
   margin: 0;
 }
@@ -80,7 +138,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
-  font-size: 0.875rem;
 }
 .music-error p {
   margin: 0;
@@ -89,8 +146,10 @@
 .music-volume-hint[hidden] {
   display: none;
 }
-@media (max-width: 900px) {
-  .music-panel {
-    grid-template-columns: minmax(0, 1fr);
+@media (hover: hover) {
+  .music-widget > summary:hover,
+  .music-close:hover {
+    color: var(--foreground);
+    background: var(--accent);
   }
 }

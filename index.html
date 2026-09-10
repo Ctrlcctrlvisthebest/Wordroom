@@ -15,7 +15,7 @@
     <link id="classicTheme" rel="stylesheet" href="./wordroom.css?v=ui1" />
     <link rel="stylesheet" href="./feedback.css" />
     <link rel="stylesheet" href="./wordroom-cloud.css" />
-    <link rel="stylesheet" href="./wordroom-music.css?v=2" />
+    <link rel="stylesheet" href="./wordroom-music.css?v=3" />
   </head>
   <body data-ui="classic">
     <header id="siteHeader" class="site-header">
@@ -284,53 +284,6 @@
         </details>
       </aside>
       <section class="workspace">
-        <section class="music-panel" aria-labelledby="musicTitle">
-          <div class="music-info">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 18V5l11-2v13M9 8l11-2" />
-              <ellipse cx="6" cy="18" rx="3" ry="2" />
-              <ellipse cx="17" cy="16" rx="3" ry="2" />
-            </svg>
-            <div>
-              <h2 id="musicTitle">学习音乐</h2>
-              <p id="musicTrack">蓝时笔记 · 第二版</p>
-            </div>
-          </div>
-          <audio
-            id="studyMusic"
-            controls
-            loop
-            preload="none"
-            src="./audio/study-continuous-v1.m4a"
-            aria-labelledby="musicTitle musicTrack"
-          >
-            <span id="musicFallback">你的浏览器不支持音频播放。</span>
-          </audio>
-          <div class="music-playlist">
-            <label id="musicSelectLabel" for="musicSelect">曲目</label>
-            <select id="musicSelect" aria-describedby="musicBlendHint">
-              <option value="0">蓝时笔记 · 第二版</option>
-            </select>
-            <div class="music-skip">
-              <button id="musicPrev" class="btn alt" type="button">
-                上一首
-              </button>
-              <button id="musicNext" class="btn alt" type="button">
-                下一首
-              </button>
-            </div>
-            <p id="musicBlendHint">8 首 · 顺序循环 · 柔和衔接</p>
-          </div>
-          <p id="musicVolumeHint" class="music-volume-hint" hidden>
-            请用设备的音量键调整音量。
-          </p>
-          <div id="musicError" class="music-error" hidden>
-            <p id="musicStatus" role="status"></p>
-            <button id="musicRetry" class="btn alt" type="button">
-              重试播放
-            </button>
-          </div>
-        </section>
         <div class="library-bar">
           <div id="count" class="count">6 个单词</div>
           <button
@@ -431,6 +384,65 @@
         </div>
       </section>
     </main>
+    <details id="musicWidget" class="music-widget">
+      <summary id="musicToggle" aria-controls="musicPanel">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 18V5l11-2v13M9 8l11-2" />
+          <ellipse cx="6" cy="18" rx="3" ry="2" />
+          <ellipse cx="17" cy="16" rx="3" ry="2" />
+        </svg>
+        <span id="musicToggleLabel">音乐</span>
+        <svg class="music-chevron" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m8 14 4-4 4 4" />
+        </svg>
+      </summary>
+      <section id="musicPanel" class="music-panel" aria-labelledby="musicTitle">
+        <div class="music-info">
+          <div>
+            <h2 id="musicTitle">学习音乐</h2>
+            <p id="musicTrack">蓝时笔记 · 第二版</p>
+          </div>
+          <button
+            id="musicClose"
+            class="music-close"
+            type="button"
+            aria-label="收起音乐面板"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <audio
+          id="studyMusic"
+          controls
+          loop
+          preload="none"
+          src="./audio/study-continuous-v1.m4a"
+          aria-labelledby="musicTitle musicTrack"
+        >
+          <span id="musicFallback">你的浏览器不支持音频播放。</span>
+        </audio>
+        <div class="music-playlist">
+          <label id="musicSelectLabel" for="musicSelect">曲目</label>
+          <select id="musicSelect" aria-describedby="musicBlendHint">
+            <option value="0">蓝时笔记 · 第二版</option>
+          </select>
+          <div class="music-skip">
+            <button id="musicPrev" class="btn alt" type="button">上一首</button>
+            <button id="musicNext" class="btn alt" type="button">下一首</button>
+          </div>
+          <p id="musicBlendHint">8 首 · 顺序循环 · 柔和衔接</p>
+        </div>
+        <p id="musicVolumeHint" class="music-volume-hint" hidden>
+          请用设备的音量键调整音量。
+        </p>
+        <div id="musicError" class="music-error" hidden>
+          <p id="musicStatus" role="status"></p>
+          <button id="musicRetry" class="btn alt" type="button">
+            重试播放
+          </button>
+        </div>
+      </section>
+    </details>
     <div class="feedback-widget" lang="en">
       <a
         class="feedback-link"
@@ -461,7 +473,7 @@
     </div>
     <script type="module" src="./wordroom.js?v=multi1"></script>
     <script type="module" src="./wordroom-ui.js?v=1"></script>
-    <script type="module" src="./wordroom-music.js?v=2"></script>
+    <script type="module" src="./wordroom-music.js?v=3"></script>
     <script type="module" src="./wordroom-cloud.js?v=multi1"></script>
   </body>
 </html>

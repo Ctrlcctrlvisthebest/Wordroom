@@ -3,6 +3,8 @@ import { PLAYLIST } from './wordroom-playlist.js?v=1';
 
 const MUSIC_TEXT = {
   zh: {
+    toggle: '音乐',
+    close: '收起音乐面板',
     title: '学习音乐',
     select: '曲目',
     prev: '上一首',
@@ -14,6 +16,8 @@ const MUSIC_TEXT = {
     retry: '重试播放',
   },
   en: {
+    toggle: 'Music',
+    close: 'Close music panel',
     title: 'Study music',
     select: 'Track',
     prev: 'Previous',
@@ -25,6 +29,8 @@ const MUSIC_TEXT = {
     retry: 'Retry playback',
   },
   es: {
+    toggle: 'Música',
+    close: 'Cerrar el panel de música',
     title: 'Música de estudio',
     select: 'Pista',
     prev: 'Anterior',
@@ -62,6 +68,22 @@ export function startMusic(
   const $ = (id) => doc?.querySelector(`#${id}`);
   const audio = $('studyMusic');
   if (!audio || !app) return;
+  const widget = $('musicWidget');
+  function closePanel(returnFocus = false) {
+    widget.open = false;
+    if (returnFocus) $('musicToggle').focus();
+  }
+  // Hiding the controls never recreates, pauses or reloads the audio element.
+  $('musicClose').addEventListener('click', () => closePanel(true));
+  doc.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && widget.open) {
+      event.preventDefault();
+      closePanel(true);
+    }
+  });
+  doc.addEventListener('click', (event) => {
+    if (widget.open && !widget.contains(event.target)) closePanel();
+  });
   let failed = false;
   let retrying = false;
   let deviceVolume = false;
@@ -89,6 +111,8 @@ export function startMusic(
   }
   function renderLabels() {
     const text = MUSIC_TEXT[app.getLocale()] || MUSIC_TEXT.zh;
+    $('musicToggleLabel').textContent = text.toggle;
+    $('musicClose').setAttribute('aria-label', text.close);
     $('musicTitle').textContent = text.title;
     $('musicSelectLabel').textContent = text.select;
     $('musicSelect').innerHTML = PLAYLIST.tracks

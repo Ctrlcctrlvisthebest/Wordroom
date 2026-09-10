@@ -211,6 +211,11 @@ function createUI({
     focus() {
       document.activeElement = this;
     }
+    contains(node) {
+      return (
+        this === node || this.children.some((child) => child.contains(node))
+      );
+    }
     remove() {
       if (this.parentNode) {
         this.parentNode.children = this.parentNode.children.filter(
@@ -267,7 +272,10 @@ function createUI({
     title: '',
     querySelector: (s) => all().find((e) => matches(e, s)) || null,
     querySelectorAll: (s) => all().filter((e) => matches(e, s)),
-    addEventListener() {},
+    listeners: {},
+    addEventListener(name, listener) {
+      Element.prototype.addEventListener.call(this, name, listener);
+    },
     createElement: (tag) => new Element(tag, {}),
     body: new Element('body', {}),
     head: new Element('head', {}),
@@ -376,6 +384,11 @@ function createThemeUI(options) {
 
 function attachMusic(ui, deviceVolume = false, options) {
   const audio = ui.$('#studyMusic');
+  // Model only the panel hierarchy needed for outside-click dismissal.
+  ui.$('#musicWidget').appendChild(ui.$('#musicToggle'));
+  ui.$('#musicWidget').appendChild(ui.$('#musicPanel'));
+  ui.$('#musicPanel').appendChild(audio);
+  ui.$('#musicPanel').appendChild(ui.$('#musicClose'));
   const calls = { play: 0, load: 0 };
   audio.paused = true;
   audio.currentTime = 0;
@@ -395,6 +408,66 @@ function attachMusic(ui, deviceVolume = false, options) {
   startMusic(ui.studyApp, ui.document, options);
   return { audio, calls };
 }
+
+void test('音乐入口默认收起且位于主背词布局之外，三语切换不自动展开或加载音频', () => {
+  const ui = createUI();
+  const { audio, calls } = attachMusic(ui);
+  assert.equal(ui.$('#musicWidget').open, false);
+  assert(ui.html.indexOf('id="musicWidget"') > ui.html.indexOf('</main>'));
+  assert.equal(ui.$('#musicToggle').attrs['aria-controls'], 'musicPanel');
+  for (const [locale, label, close] of [
+    ['zh', '音乐', '收起音乐面板'],
+    ['en', 'Music', 'Close music panel'],
+    ['es', 'Música', 'Cerrar el panel de música'],
+  ]) {
+    ui.language(locale);
+    assert.equal(ui.$('#musicToggleLabel').textContent, label);
+    assert.equal(ui.$('#musicClose').attrs['aria-label'], close);
+    assert.equal(ui.$('#musicWidget').open, false);
+  }
+  assert.equal(audio.paused, true);
+  assert.deepEqual(calls, { play: 0, load: 0 });
+});
+
+void test('收起按钮、Esc 和点击面板外都只关闭控件，不中断播放或抢走外部焦点', async () => {
+  const ui = createUI();
+  const { audio, calls } = attachMusic(ui);
+  const widget = ui.$('#musicWidget');
+  await audio.play();
+  audio.currentTime = 123;
+  audio.volume = 0.2;
+  const before = plain(ui.studyApp.capture());
+  widget.open = true;
+  ui.document.listeners.click({ target: audio });
+  assert.equal(widget.open, true);
+  ui.$('#musicClose').click();
+  assert.equal(widget.open, false);
+  assert.equal(ui.document.activeElement, ui.$('#musicToggle'));
+  widget.open = true;
+  let prevented = 0;
+  ui.document.listeners.keydown({
+    key: 'Escape',
+    preventDefault: () => prevented++,
+  });
+  assert.equal(widget.open, false);
+  assert.equal(prevented, 1);
+  ui.document.listeners.keydown({
+    key: 'Escape',
+    preventDefault: () => prevented++,
+  });
+  assert.equal(prevented, 1);
+  widget.open = true;
+  ui.$('#next').focus();
+  ui.document.listeners.click({ target: ui.$('#next') });
+  assert.equal(widget.open, false);
+  assert.equal(ui.document.activeElement, ui.$('#next'));
+  assert.equal(ui.$('#studyMusic'), audio);
+  assert.equal(audio.paused, false);
+  assert.equal(audio.currentTime, 123);
+  assert.equal(audio.volume, 0.2);
+  assert.deepEqual(calls, { play: 1, load: 0 });
+  assert.deepEqual(plain(ui.studyApp.capture()), before);
+});
 
 void test('BGM 使用连续混音 AAC，默认关闭、按需加载、原生控制并循环', () => {
   const ui = createUI({ savedLocale: 'en' });
@@ -624,6 +697,7 @@ void test('BGM 播放中切换 UI、语言和练习视图，不换音频节点�
   await audio.play();
   audio.currentTime = 37.25;
   audio.volume = 0.2;
+  ui.$('#musicWidget').open = true;
   const changeId = ui.studyApp.getChangeId();
   const pending = ui.switchUI('p3r');
   ui.document.head.children[0].onload();
@@ -637,6 +711,7 @@ void test('BGM 播放中切换 UI、语言和练习视图，不换音频节点�
   assert.equal(audio.currentTime, 37.25);
   assert.equal(audio.volume, 0.2);
   assert.equal(audio.paused, false);
+  assert.equal(ui.$('#musicWidget').open, true);
   assert.deepEqual(calls, { play: 1, load: 0 });
   assert.equal(ui.studyApp.getChangeId(), changeId);
 });
