@@ -12,12 +12,12 @@
     />
     <title>词间 · Wordroom</title>
     <meta name="description" content="导入 CSV 词表，随机翻卡与抽词造句。" />
-    <link rel="stylesheet" href="./wordroom.css?v=multi1" />
+    <link id="classicTheme" rel="stylesheet" href="./wordroom.css?v=ui1" />
     <link rel="stylesheet" href="./feedback.css" />
     <link rel="stylesheet" href="./wordroom-cloud.css" />
   </head>
-  <body>
-    <header class="site-header">
+  <body data-ui="classic">
+    <header id="siteHeader" class="site-header">
       <div class="brand">
         <div class="logo" aria-hidden="true">w.</div>
         <div>
@@ -36,6 +36,7 @@
             <rect x="7" y="6" width="13" height="15" rx="2" />
             <path d="M16 3H6a2 2 0 0 0-2 2v12" />
           </svg>
+          <span class="mode-en" aria-hidden="true">STUDY</span>
           <span id="cardsTabLabel">随机卡片</span>
         </button>
         <button
@@ -47,23 +48,34 @@
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5" />
           </svg>
+          <span class="mode-en" aria-hidden="true">PRACTICE</span>
           <span id="drawTabLabel">抽词练习</span>
         </button>
       </nav>
+      <div id="editionMark" class="edition-mark" aria-hidden="true">
+        WORDROOM<span>STUDY SYSTEM / RELOAD</span>
+      </div>
       <div class="header-actions">
+        <label id="uiLabel" class="sr-only" for="uiSelect">界面风格</label>
+        <select id="uiSelect" class="language-select" aria-labelledby="uiLabel">
+          <option id="classicUIOption" value="classic" selected>经典 UI</option>
+          <option id="previewUIOption" value="p3r">P3R 预览</option>
+        </select>
         <label class="sr-only" for="languageSelect">语言</label>
         <select id="languageSelect" class="language-select" aria-label="语言">
           <option value="zh">中文</option>
           <option value="en">English</option>
           <option value="es">Español</option>
         </select>
+        <span id="uiStatus" class="ui-status" role="status" hidden></span>
       </div>
     </header>
     <main class="layout feedback-space">
-      <aside class="side">
+      <aside id="sidebar" class="side">
         <details id="libraryPanel" class="library-panel" open>
           <summary>
-            <span id="libraryTitle">词表与设置</span
+            <span class="section-index" aria-hidden="true">01</span
+            ><span id="libraryTitle">词表与设置</span
             ><svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m8 10 4 4 4-4" />
             </svg>
@@ -148,7 +160,8 @@
         </details>
         <details id="cloudPanel" class="library-panel cloud-panel">
           <summary>
-            <span data-cloud-text="title">云端词表</span
+            <span class="section-index" aria-hidden="true">02</span
+            ><span data-cloud-text="title">云端词表</span
             ><svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m8 10 4 4 4-4" />
             </svg>
@@ -287,6 +300,9 @@
         <div id="cardsView">
           <div class="workspace-heading">
             <div>
+              <div class="mode-heading" aria-hidden="true">
+                RECALL<span>!</span>
+              </div>
               <h1 id="reviewLabel">今日复习</h1>
               <p id="brandTagline" class="muted">把你的词表，变成今天的练习</p>
             </div>
@@ -300,6 +316,7 @@
             </button>
           </div>
           <div class="progressline">
+            <span class="readout-label" aria-hidden="true">PROGRESS</span>
             <span id="position" aria-live="polite"></span>
           </div>
           <div class="bar"><i id="progress"></i></div>
@@ -327,6 +344,9 @@
         <div id="drawView" class="hide">
           <div class="drawhead">
             <div>
+              <div class="mode-heading" aria-hidden="true">
+                COMPOSE<span>!</span>
+              </div>
               <h1 id="drawTitle">随机抽取一组词</h1>
               <span id="drawHint" class="muted"
                 >不看答案，试着为每个词写一个自己的例句。</span
@@ -392,6 +412,7 @@
       </div>
     </div>
     <script type="module" src="./wordroom.js?v=multi1"></script>
+    <script type="module" src="./wordroom-ui.js?v=1"></script>
     <script type="module" src="./wordroom-cloud.js?v=multi1"></script>
   </body>
 </html>

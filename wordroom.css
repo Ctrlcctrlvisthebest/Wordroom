@@ -124,6 +124,20 @@ h2 {
   flex: 1;
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.edition-mark,
+.mode-en,
+.section-index,
+.mode-heading,
+.readout-label {
+  display: none;
+}
+.ui-status {
+  flex-basis: 100%;
+  font-size: 0.875rem;
+  text-align: right;
 }
 .language-select {
   min-height: 44px;
@@ -725,6 +739,9 @@ input[type='number'] {
   }
 }
 @media (max-width: 480px) {
+  .header-actions {
+    flex: 1 1 100%;
+  }
   .library-content {
     grid-template-columns: minmax(0, 1fr);
   }

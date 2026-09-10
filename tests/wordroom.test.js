@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { startCloud, CLOUD_TEXT } from '../wordroom-cloud.js';
+import { startUI } from '../wordroom-ui.js';
 import { newSyncCode, validateSnapshot } from '../cloud-data.js';
 import {
   TRANSLATIONS,
@@ -153,6 +154,7 @@ function createUI({
 } = {}) {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const js = readFileSync(new URL('../wordroom.js', import.meta.url), 'utf8');
+  const downloads = [];
   class Element {
     constructor(tag, attrs) {
       this.tagName = tag.toUpperCase();
@@ -207,13 +209,29 @@ function createUI({
     focus() {
       document.activeElement = this;
     }
-    remove() {}
+    remove() {
+      if (this.parentNode) {
+        this.parentNode.children = this.parentNode.children.filter(
+          (child) => child !== this,
+        );
+        this.parentNode = null;
+      }
+    }
     appendChild(child) {
-      this.children.push(child);
+      return this.insertBefore(child, null);
+    }
+    insertBefore(child, reference) {
+      child.remove();
+      const index = this.children.indexOf(reference);
+      if (index === -1) this.children.push(child);
+      else this.children.splice(index, 0, child);
+      child.parentNode = this;
+      return child;
     }
     click() {
       if (this.tagName === 'A' && downloadFailure)
         throw new Error('Download blocked');
+      if (this.tagName === 'A' && this.download) downloads.push(this.download);
       if (!this.disabled && this.listeners.click)
         return this.listeners.click({ target: this });
     }
@@ -250,6 +268,7 @@ function createUI({
     addEventListener() {},
     createElement: (tag) => new Element(tag, {}),
     body: new Element('body', {}),
+    head: new Element('head', {}),
   };
 
   const blobs = [];
@@ -314,6 +333,7 @@ function createUI({
     uploadFiles,
     document,
     blobs,
+    downloads,
     html,
     getMappingCalls: () => context.wordMappingCalls,
     studyApp: vm.runInContext('studyApp', context),
@@ -336,6 +356,140 @@ const allDrawWords = (ui) => {
   ui.$('#drawBtn').click();
   return [...ui.document.querySelectorAll('[data-answer]')];
 };
+
+function createThemeUI(options) {
+  const ui = createUI(options);
+  // The tiny DOM fixture is otherwise flat; model only the moving nav's parents.
+  ui.$('#siteHeader').appendChild(ui.$('#practiceNav'));
+  ui.$('#siteHeader').appendChild(ui.$('#editionMark'));
+  ui.$('#sidebar').appendChild(ui.$('#libraryPanel'));
+  startUI(ui.studyApp, ui.document);
+  ui.switchUI = (theme) => {
+    const select = ui.$('#uiSelect');
+    select.value = theme;
+    return select.listeners.change({ target: select });
+  };
+  return ui;
+}
+
+void test('界面默认经典版，不预加载 P3R，保留手机折叠状态和语言', () => {
+  for (const [locale, label] of [
+    ['zh', '经典 UI'],
+    ['en', 'Classic UI'],
+    ['es', 'UI clásica'],
+  ]) {
+    const ui = createThemeUI({ mobile: true, savedLocale: locale });
+    assert.equal(ui.document.body.dataset.ui, 'classic');
+    assert.equal(ui.$('#classicTheme').media, 'all');
+    assert.equal(ui.$('#uiSelect').value, 'classic');
+    assert.equal(ui.$('#classicUIOption').textContent, label);
+    assert.equal(ui.$('#practiceNav').parentNode, ui.$('#siteHeader'));
+    assert.equal(ui.$('#libraryPanel').open, false);
+    assert.equal(ui.document.head.children.length, 0);
+    assert.equal(ui.$('#uiStatus').hidden, true);
+    assert.match(ui.html.split('</header>')[0], /id="practiceNav"/);
+  }
+  const blocked = createThemeUI({ storageBlocked: true });
+  assert.equal(blocked.$('#uiSelect').value, 'classic');
+  assert.equal(blocked.$('#libraryPanel').open, true);
+});
+
+void test('反复切换 UI 保留多词表、翻面、星标、抽词、造句节点和导航监听器', async () => {
+  const ui = createThemeUI();
+  await ui.uploadFiles([
+    csvFile('a.csv', 'word,meaning\nhello,你好\nworld,世界'),
+    csvFile('b.csv', 'palabra,ejemplo\nhola,Hola.'),
+  ]);
+  ui.$('#next').click();
+  ui.$('#flip').click();
+  ui.$('#cardStar').click();
+  ui.$('#drawTab').click();
+  ui.$('#libraryPanel').open = false;
+  const textarea = ui.document.querySelectorAll('[data-answer]')[0];
+  textarea.value = 'Keep this sentence.';
+  textarea.selectionStart = 2;
+  textarea.selectionEnd = 5;
+  textarea.listeners.input({ target: textarea });
+  const snapshot = plain(ui.studyApp.capture());
+  const changeId = ui.studyApp.getChangeId();
+  const position = ui.$('#position').textContent;
+  const drawMarkup = ui.$('#drawGrid').innerHTML;
+  const mappings = ui.getMappingCalls();
+  const nav = ui.$('#practiceNav');
+
+  const pending = ui.switchUI('p3r');
+  assert.equal(ui.$('#uiSelect').disabled, true);
+  assert.equal(ui.document.body.dataset.ui, 'classic');
+  assert.equal(nav.parentNode, ui.$('#siteHeader'));
+  const sheet = ui.document.head.children[0];
+  assert.equal(sheet.media, 'not all');
+  assert.match(sheet.href, /wordroom-p3r\.css\?v=2$/);
+  sheet.onload();
+  await pending;
+
+  for (const theme of ['p3r', 'classic', 'p3r', 'classic']) {
+    await ui.switchUI(theme);
+    const preview = theme === 'p3r';
+    assert.equal(ui.document.body.dataset.ui, theme);
+    assert.equal(ui.$('#classicTheme').media, preview ? 'not all' : 'all');
+    assert.equal(sheet.media, preview ? 'all' : 'not all');
+    assert.equal(nav.parentNode, ui.$(preview ? '#sidebar' : '#siteHeader'));
+    assert.equal(ui.$('#practiceNav'), nav);
+    assert.equal(ui.$('#uiSelect').disabled, false);
+    assert.equal(ui.$('#libraryPanel').open, false);
+    assert.equal(ui.$('#position').textContent, position);
+    assert.equal(ui.$('#card').classList.contains('is-flipped'), true);
+    assert.equal(ui.$('#drawGrid').innerHTML, drawMarkup);
+    assert.equal(ui.$('#drawView').classList.contains('hide'), false);
+    assert.equal(ui.document.querySelectorAll('[data-answer]')[0], textarea);
+    assert.equal(textarea.value, 'Keep this sentence.');
+    assert.equal(textarea.selectionStart, 2);
+    assert.equal(textarea.selectionEnd, 5);
+    assert.equal(ui.studyApp.getChangeId(), changeId);
+    assert.deepEqual(plain(ui.studyApp.capture()), snapshot);
+    assert.equal(ui.getMappingCalls(), mappings);
+    assert.equal(ui.document.head.children.length, 1);
+    assert.equal(
+      ui.document.querySelector('meta[name="theme-color"]').attrs.content,
+      preview ? '#0758ee' : '#243550',
+    );
+  }
+  ui.$('#cardsTab').click();
+  assert.equal(ui.$('#cardsView').classList.contains('hide'), false);
+  ui.$('#next').click();
+  assert.notEqual(ui.$('#position').textContent, position);
+  assert.equal(createThemeUI().$('#uiSelect').value, 'classic');
+});
+
+void test('预览 CSS 加载失败保留经典 UI，可重试；提示跟随语言切换', async () => {
+  const ui = createThemeUI({ savedLocale: 'en' });
+  const pending = ui.switchUI('p3r');
+  assert.equal(ui.$('#uiStatus').textContent, 'Loading preview…');
+  ui.language('es');
+  assert.equal(ui.$('#uiStatus').textContent, 'Cargando vista previa…');
+  ui.document.head.children[0].onerror();
+  await pending;
+  assert.equal(ui.document.head.children.length, 0);
+  assert.equal(ui.$('#uiSelect').disabled, false);
+  assert.equal(ui.$('#uiSelect').value, 'classic');
+  assert.equal(ui.$('#classicTheme').media, 'all');
+  assert.equal(ui.$('#practiceNav').parentNode, ui.$('#siteHeader'));
+  assert.equal(ui.$('#uiStatus').hidden, false);
+  assert.match(ui.$('#uiStatus').textContent, /Inténtalo de nuevo/);
+
+  const retry = ui.switchUI('p3r');
+  ui.document.head.children[0].onload();
+  await retry;
+  assert.equal(ui.document.body.dataset.ui, 'p3r');
+  assert.equal(ui.$('#uiStatus').hidden, true);
+  ui.language('zh');
+  assert.equal(ui.$('#uiLabel').textContent, '界面风格');
+  assert.equal(ui.$('#previewUIOption').textContent, 'P3R 预览');
+  assert.equal(ui.$('#uiSelect').value, 'p3r');
+  await ui.switchUI('unknown');
+  assert.equal(ui.$('#uiSelect').value, 'p3r');
+  assert.equal(ui.document.body.dataset.ui, 'p3r');
+});
 
 void test('多选 CSV 按各自映射合并；重复单词与空词行保留独立来源', async () => {
   const ui = createUI();
@@ -516,10 +670,8 @@ void test('多文件星标分别导出原始 CSV，包含重复表头、原始�
     ['ejemplo', 'palabra', 'other'],
     ['a\nb', 'second', '"quoted"'],
   ]);
-  assert.notEqual(
-    ui.document.body.children[0].download,
-    ui.document.body.children[1].download,
-  );
+  assert.equal(ui.downloads.length, 2);
+  assert.notEqual(ui.downloads[0], ui.downloads[1]);
   ui.$('#exportBtn').click();
   assert.equal(ui.$('#exportSources').classList.contains('hide'), true);
 });
