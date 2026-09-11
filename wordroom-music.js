@@ -1,5 +1,5 @@
 import { studyApp, escapeHTML } from './wordroom.js?v=multi1';
-import { PLAYLIST } from './wordroom-playlist.js?v=1';
+import { PLAYLIST } from './wordroom-playlist.js?v=832ab2edad3d';
 
 const MUSIC_TEXT = {
   zh: {
@@ -9,7 +9,7 @@ const MUSIC_TEXT = {
     select: '曲目',
     prev: '上一首',
     next: '下一首',
-    blend: '8 首 · 顺序循环 · 柔和衔接',
+    blend: `${PLAYLIST.tracks.length} 首 · 顺序循环 · 柔和衔接`,
     fallback: '你的浏览器不支持音频播放。',
     volume: '请用设备的音量键调整音量。',
     error: '暂时无法播放，请检查网络后重试。',
@@ -22,7 +22,7 @@ const MUSIC_TEXT = {
     select: 'Track',
     prev: 'Previous',
     next: 'Next',
-    blend: '8 tracks · Repeat playlist · Smooth transitions',
+    blend: `${PLAYLIST.tracks.length} tracks · Repeat playlist · Smooth transitions`,
     fallback: 'Your browser does not support audio playback.',
     volume: 'Use your device’s volume buttons to adjust the sound.',
     error: 'Audio could not play. Check your connection and try again.',
@@ -35,7 +35,7 @@ const MUSIC_TEXT = {
     select: 'Pista',
     prev: 'Anterior',
     next: 'Siguiente',
-    blend: '8 pistas · Repetir lista · Transiciones suaves',
+    blend: `${PLAYLIST.tracks.length} pistas · Repetir lista · Transiciones suaves`,
     fallback: 'Tu navegador no admite la reproducción de audio.',
     volume: 'Ajusta el volumen con los botones de tu dispositivo.',
     error:

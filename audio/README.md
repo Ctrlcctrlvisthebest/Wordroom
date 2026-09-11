@@ -1,19 +1,43 @@
-# Study playlist
+# 添加 / 更新学习音乐
 
-The eight original `.m4a` files are preserved unchanged. The UUID-named files
-contain Opus audio; `blue-hour-notes-v2.m4a` contains AAC audio.
+1. 把新歌放进本文件夹，支持 `.m4a`、`.mp3`、`.wav`、`.ogg`、`.opus`、`.flac`、`.aac`。
+   建议先用歌名命名，例如 `雨夜.m4a`；新歌默认使用文件名作为显示名称。
+   UUID 文件名会自动显示为「曲目 09」这类编号。
+2. 在项目目录运行 `npm run music:update`。
+3. 检查结果并运行 `npm test`，再提交、推送到 GitHub。更新命令本身**不会发布**。
+   也可以继续告诉助手「更新 audio 里的新歌」，由助手完成更新与发布。
 
-The website streams `study-continuous-v1.m4a`: a 22:28 stereo AAC mix (32 kHz,
-160 kbps, fast-start metadata). Original tracks were loudness-matched to about
--22 LUFS with extra endpoint silence trimmed. Adjacent tracks overlap for three
-seconds using equal-power fades, including the last-to-first transition.
+## 名称和顺序
 
-Chapter positions and translated labels are in `../wordroom-playlist.js`.
-Automatic transitions are rendered into the mix, so background-tab timers do
-not control them. Manual chapter changes use a short Web Audio fade when
-available. Older browsers without Web Audio still play the continuous mix.
+`tracks.json` 保存曲目顺序和中 / 英 / 西三语名称。可以直接编辑 `title`，
+或移动整条记录来调整顺序，再运行更新命令。已有曲目保持原顺序，新文件追加到末尾。
+新增文件初次加入前命名最方便；重命名已有文件时，也要同步修改记录中的 `original`。
+移除曲目需要同时移走原文件和对应记录，不要仅修改生成的播放列表。
 
-Playback is opt-in, uses native controls, and does not preload the mix on page
-load. No audio is uploaded to the cloud-sync service. When adding or changing
-tracks, regenerate the continuous mix and its chapter positions together, and
-give the new asset a versioned filename to avoid stale browser caches.
+## 命令自动完成的工作
+
+- 检测新增或内容有变化的歌曲，不覆盖原文件。
+- 平衡到约 -22 LUFS，处理多余首尾静音，验证响度和峰值。
+- 重建 3 秒等功率交叉淡化的连续音轨，最后一首也衔接回第一首。
+- 生成 AAC（32 kHz、双声道、160 kbps、流式加载元数据）。
+- 更新章节、三语曲目数、网页音源和缓存版本号。
+- 拒绝缺失 / 重复记录、损坏 / 静音 / 过短音频，以及接近 GitHub 大小限制的文件。
+
+已处理的歌曲缓存于被 Git 忽略的 `work/music-cache/`，以后只需重新处理新歌或变化的歌；
+连续混音仍需重新合成。没有变化时，会直接复用已验证的混音，避免重复生成。
+旧的 `study-continuous-*.m4a` 不会被误当成新歌，也不会自动删除，保证旧缓存页面仍可播放。
+不要手动编辑 `wordroom-playlist.js`；它由命令生成。
+
+## 本地环境
+
+需要 Node/npm、Python 3 和 FFmpeg，不需要安装 Python 第三方包，也不增加网站依赖。
+脚本依次查找环境变量 `FFMPEG_BIN`、系统 `ffmpeg`、本机的 `work/music-tools/ffmpeg`。
+当前电脑已放置本地 FFmpeg；换电脑时需要自行配置 FFmpeg，它不随 Git 仓库上传。
+若上次异常退出留下 `work/music-cache/update.lock`，确认没有更新进程后移除该空目录再重试。
+
+## 播放方式
+
+播放器保持左下角默认折叠、手动开始，不在打开网页时预加载音乐。
+自动衔接已经制作进音轨，不依赖后台网页计时器；手动切歌在支持 Web Audio 时有短淡化。
+音频不经过云端词表同步服务。随着曲库增大，若连续音轨接近文件大小限制，需要拆分播放列表
+或另行迁移到音频存储服务，不能无限扩充单个混音文件。

@@ -484,7 +484,7 @@ void test('BGM 使用连续混音 AAC，默认关闭、按需加载、原生控�
   assert.equal(ui.$('#musicError').hidden, true);
   const file = readFileSync(new URL(`../${PLAYLIST.src}`, import.meta.url));
   assert.equal(file.subarray(4, 8).toString(), 'ftyp');
-  assert(file.length > 1_000_000 && file.length < 40_000_000);
+  assert(file.length > 1_000_000 && file.length < 95_000_000);
   assert(
     file.indexOf('moov') < file.indexOf('mdat'),
     'Metadata precedes audio for streaming',
@@ -494,15 +494,19 @@ void test('BGM 使用连续混音 AAC，默认关闭、按需加载、原生控�
 void test('播放列表覆盖 audio 全部原曲，章节有序且处于连续音轨范围内', () => {
   const originals = readdirSync(new URL('../audio/', import.meta.url)).filter(
     (name) =>
-      /\.(m4a|mp3|wav|ogg|opus)$/i.test(name) &&
-      name !== PLAYLIST.src.split('/').at(-1),
+      /\.(m4a|mp3|wav|ogg|opus|flac|aac)$/i.test(name) &&
+      !name.startsWith('study-continuous-'),
   );
   assert.deepEqual(
     PLAYLIST.tracks.map((track) => track.original).sort(),
     originals.sort(),
   );
-  assert.equal(PLAYLIST.tracks.length, 8);
-  assert.equal(new Set(PLAYLIST.tracks.map((track) => track.id)).size, 8);
+  assert(PLAYLIST.tracks.length > 1);
+  assert.equal(new Set(PLAYLIST.tracks.map((track) => track.id)).size, originals.length);
+  assert.deepEqual(
+    PLAYLIST.tracks.map(({ id, original, title }) => ({ id, original, title })),
+    JSON.parse(readFileSync(new URL('../audio/tracks.json', import.meta.url), 'utf8')),
+  );
   assert.equal(PLAYLIST.crossfade, 3);
   for (const [index, track] of PLAYLIST.tracks.entries()) {
     assert(track.start <= track.switchAt && track.switchAt <= track.cue);
@@ -510,7 +514,7 @@ void test('播放列表覆盖 audio 全部原曲，章节有序且处于连续�
     for (const language of ['zh', 'en', 'es']) assert(track.title[language]);
     if (index) {
       assert(track.start > PLAYLIST.tracks[index - 1].cue);
-      assert.equal(track.cue - track.start, PLAYLIST.crossfade);
+      assert(Math.abs(track.cue - track.start - PLAYLIST.crossfade) < 0.0001);
     }
   }
 });
@@ -523,7 +527,7 @@ void test('连续播放的当前曲目在交叉淡化中点更新，最后一首
     assert.equal(trackAtTime(switchAt - 0.01), index - 1);
     assert.equal(trackAtTime(switchAt), index);
   }
-  assert.equal(trackAtTime(PLAYLIST.loopSwitchAt - 0.01), 7);
+  assert.equal(trackAtTime(PLAYLIST.loopSwitchAt - 0.01), PLAYLIST.tracks.length - 1);
   assert.equal(trackAtTime(PLAYLIST.loopSwitchAt), 0);
   assert.equal(trackAtTime(PLAYLIST.duration), 0);
 });
@@ -534,7 +538,7 @@ void test('暂停时选曲不自动播放，未加载元数据时记住最后选
   const before = plain(ui.studyApp.capture());
   audio.readyState = 0;
   await ui.$('#musicPrev').click();
-  assert.equal(ui.$('#musicSelect').value, '7');
+  assert.equal(ui.$('#musicSelect').value, String(PLAYLIST.tracks.length - 1));
   assert.equal(audio.currentTime, 0);
   assert.equal(calls.load, 1);
   audio.networkState = 2;
@@ -542,13 +546,13 @@ void test('暂停时选曲不自动播放，未加载元数据时记住最后选
   assert.equal(calls.load, 1);
   audio.readyState = 4;
   audio.listeners.loadedmetadata();
-  assert.equal(audio.currentTime, PLAYLIST.tracks[6].cue);
+  assert.equal(audio.currentTime, PLAYLIST.tracks.at(-2).cue);
   assert.equal(audio.paused, true);
   assert.equal(calls.play, 0);
   ui.$('#musicSelect').value = '2';
   await ui.$('#musicSelect').listeners.change();
   assert.equal(audio.currentTime, PLAYLIST.tracks[2].cue);
-  for (const invalid of ['-1', '8', 'NaN', '1.5']) {
+  for (const invalid of ['-1', String(PLAYLIST.tracks.length), 'NaN', '1.5']) {
     ui.$('#musicSelect').value = invalid;
     await ui.$('#musicSelect').listeners.change();
     assert.equal(ui.$('#musicSelect').value, '2');
