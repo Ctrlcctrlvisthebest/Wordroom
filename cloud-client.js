@@ -5,7 +5,7 @@ import {
 } from './cloud-data.js?v=multi1';
 
 export class CloudClient {
-  constructor(baseURL, code, fetcher = globalThis.fetch) {
+  constructor(baseURL, code, fetcher = globalThis.fetch.bind(globalThis)) {
     if (!validSyncCode(code)) throw new Error('invalidCode');
     const url = new URL(baseURL);
     if (
@@ -18,6 +18,7 @@ export class CloudClient {
       throw new Error('notConfigured');
     this.baseURL = url.origin;
     this.code = code;
+    // Native Window.fetch requires its original receiver, unlike Node fetch.
     this.fetcher = fetcher;
   }
   async request(path, options = {}) {

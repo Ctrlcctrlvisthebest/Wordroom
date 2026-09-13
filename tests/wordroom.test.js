@@ -662,12 +662,12 @@ void test('手动拖动进度优先于尚未执行的切歌，自动换曲与三
   assert.equal(audio.currentTime, PLAYLIST.tracks[4].cue);
   assert.equal(ui.$('#musicSelect').value, '4');
   ui.language('es');
-  assert.equal(ui.$('#musicTrack').textContent, 'Pista 05');
+  assert.equal(ui.$('#musicTrack').textContent, PLAYLIST.tracks[4].title.es);
   assert.equal(ui.$('#musicNext').textContent, 'Siguiente');
   audio.currentTime = PLAYLIST.tracks[6].switchAt;
   audio.listeners.timeupdate();
   assert.equal(ui.$('#musicSelect').value, '6');
-  assert.equal(ui.$('#musicTrack').textContent, 'Pista 07');
+  assert.equal(ui.$('#musicTrack').textContent, PLAYLIST.tracks[6].title.es);
   audio.currentTime = PLAYLIST.loopSwitchAt;
   audio.listeners.timeupdate();
   assert.equal(ui.$('#musicSelect').value, '0');

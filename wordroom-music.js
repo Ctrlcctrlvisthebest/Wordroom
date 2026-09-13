@@ -1,5 +1,5 @@
 import { studyApp, escapeHTML } from './wordroom.js?v=multi1';
-import { PLAYLIST } from './wordroom-playlist.js?v=832ab2edad3d';
+import { PLAYLIST } from './wordroom-playlist.js?v=137b0a28f4f6';
 
 const MUSIC_TEXT = {
   zh: {

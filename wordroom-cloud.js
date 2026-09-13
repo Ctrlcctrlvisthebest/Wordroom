@@ -1,6 +1,6 @@
 import { studyApp, escapeHTML } from './wordroom.js?v=multi1';
 import { newSyncCode, validSyncCode } from './cloud-data.js?v=multi1';
-import { CloudClient } from './cloud-client.js?v=multi1';
+import { CloudClient } from './cloud-client.js?v=fetch-binding1';
 import { CLOUD_API_URL } from './cloud-config.js';
 
 export const CLOUD_TEXT = {

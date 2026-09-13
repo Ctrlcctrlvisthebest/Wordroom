@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wordroom 云端连接回归测试</title>
+  <h1>Wordroom 云端连接回归测试</h1>
+  <p>
+    使用真实浏览器的默认 fetch 和临时随机测试码，只读取正式接口的空词表列表。
+  </p>
+  <p>不读取浏览器存储，不保存同步码，不创建或修改任何云端词表。</p>
+  <button type="button" id="run">运行只读连接测试</button>
+  <pre id="result" role="status">尚未运行</pre>
+  <script type="module">
+    import { CloudClient } from '../cloud-client.js?v=fetch-binding1';
+    import { newSyncCode } from '../cloud-data.js?v=multi1';
+    import { CLOUD_API_URL } from '../cloud-config.js';
+
+    const button = document.querySelector('#run');
+    const result = document.querySelector('#result');
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      result.textContent = '测试中…';
+      try {
+        // Do not inject a mock/wrapper: the production default must work.
+        const client = new CloudClient(CLOUD_API_URL, newSyncCode());
+        const libraries = await client.list();
+        if (libraries.length !== 0) throw new Error('unexpectedTestData');
+        result.dataset.state = 'passed';
+        result.textContent =
+          '通过：真实浏览器 → 正式云端词表接口 → 数据库，连接成功。';
+      } catch (error) {
+        result.dataset.state = 'failed';
+        // Never output the client object, credentials, headers, or response body.
+        result.textContent = `失败：${error.name}: ${error.message}`;
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</html>
