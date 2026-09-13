@@ -15,7 +15,7 @@
     <link id="classicTheme" rel="stylesheet" href="./wordroom.css?v=ui1" />
     <link rel="stylesheet" href="./feedback.css" />
     <link rel="stylesheet" href="./wordroom-cloud.css" />
-    <link rel="stylesheet" href="./wordroom-music.css?v=3" />
+    <link rel="stylesheet" href="./wordroom-music.css?v=4" />
   </head>
   <body data-ui="classic">
     <header id="siteHeader" class="site-header">
@@ -398,9 +398,11 @@
       </summary>
       <section id="musicPanel" class="music-panel" aria-labelledby="musicTitle">
         <div class="music-info">
-          <div>
+          <div class="music-heading">
+            <span class="music-eyebrow" aria-hidden="true"
+              >WORDROOM / AUDIO</span
+            >
             <h2 id="musicTitle">学习音乐</h2>
-            <p id="musicTrack">蓝时笔记 · 第二版</p>
           </div>
           <button
             id="musicClose"
@@ -421,6 +423,94 @@
         >
           <span id="musicFallback">你的浏览器不支持音频播放。</span>
         </audio>
+        <div id="musicControls" class="music-controls" hidden>
+          <div class="music-now">
+            <div class="music-disc" aria-hidden="true"><span></span></div>
+            <div class="music-now-title">
+              <span
+                id="musicTrackIndex"
+                class="music-track-index"
+                aria-hidden="true"
+                >01 / 18</span
+              >
+              <p id="musicTrack">1</p>
+            </div>
+            <span class="music-signal" aria-hidden="true"
+              ><i></i><i></i><i></i><i></i
+            ></span>
+          </div>
+          <div class="music-timeline">
+            <input
+              id="musicSeek"
+              class="music-range"
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value="0"
+              aria-label="播放进度"
+              disabled
+            />
+            <div class="music-times">
+              <span id="musicElapsed">0:00</span
+              ><span id="musicDuration">—:—</span>
+            </div>
+          </div>
+          <div class="music-transport">
+            <button
+              id="musicPlay"
+              class="music-play"
+              type="button"
+              aria-label="播放音乐"
+            >
+              <svg
+                class="music-icon-play"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="m9 5 11 7-11 7Z" />
+              </svg>
+              <svg
+                class="music-icon-pause"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M8 5v14M16 5v14" />
+              </svg>
+            </button>
+            <span id="musicPlaybackLabel" class="music-playback-label"
+              >播放音乐</span
+            >
+            <div id="musicVolumeControls" class="music-volume-controls">
+              <button
+                id="musicMute"
+                class="music-icon-button"
+                type="button"
+                aria-label="静音"
+                aria-pressed="false"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m11 5-6 4H2v6h3l6 4Z" />
+                  <path
+                    class="music-volume-waves"
+                    d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"
+                  />
+                  <path class="music-volume-slash" d="m15 9 6 6m0-6-6 6" />
+                </svg>
+              </button>
+              <input
+                id="musicVolume"
+                class="music-range"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value="35"
+                aria-label="音量"
+              />
+            </div>
+          </div>
+        </div>
         <div class="music-playlist">
           <label id="musicSelectLabel" for="musicSelect">曲目</label>
           <select id="musicSelect" aria-describedby="musicBlendHint">
@@ -472,8 +562,9 @@
       </div>
     </div>
     <script type="module" src="./wordroom.js?v=multi1"></script>
+    <script type="module" src="./wordroom-shortcuts.js?v=2"></script>
     <script type="module" src="./wordroom-ui.js?v=1"></script>
-    <script type="module" src="./wordroom-music.js?v=9be4fde3df53"></script>
+    <script type="module" src="./wordroom-music.js?v=controls1"></script>
     <script type="module" src="./wordroom-cloud.js?v=fetch-binding1"></script>
   </body>
 </html>

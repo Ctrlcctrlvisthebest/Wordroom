@@ -6,6 +6,7 @@ import { startCloud, CLOUD_TEXT } from '../wordroom-cloud.js';
 import { startUI } from '../wordroom-ui.js';
 import { startMusic, trackAtTime } from '../wordroom-music.js';
 import { PLAYLIST } from '../wordroom-playlist.js';
+import { startShortcuts } from '../wordroom-shortcuts.js';
 import { newSyncCode, validateSnapshot } from '../cloud-data.js';
 import {
   TRANSLATIONS,
@@ -307,6 +308,7 @@ function createUI({
     setTimeout: (fn) => fn(),
   });
   vm.runInContext(js.replace(/^export /gm, ''), context);
+  startShortcuts(document);
   // Count mapping passes without exposing test hooks in the application.
   vm.runInContext(
     `globalThis.wordMappingCalls = 0;
@@ -349,6 +351,122 @@ function createUI({
     studyApp: vm.runInContext('studyApp', context),
   };
 }
+
+function pressKey(ui, key, options = {}) {
+  let prevented = false;
+  ui.document.listeners.keydown({
+    key,
+    target: ui.document.body,
+    preventDefault: () => {
+      prevented = true;
+    },
+    ...options,
+  });
+  return prevented;
+}
+
+void test('方向键切换单词、空格翻面，长按和首尾不会越界或连续翻面', async () => {
+  const ui = createUI();
+  await ui.upload('word,meaning\none,一\ntwo,二');
+  assert.equal(ui.$('#position').textContent, '1 / 2');
+  assert.equal(pressKey(ui, 'ArrowLeft'), true);
+  assert.equal(ui.$('#position').textContent, '1 / 2');
+  assert.equal(pressKey(ui, ' ', { target: ui.$('#card') }), true);
+  assert.equal(ui.$('#card').classList.contains('is-flipped'), true);
+  pressKey(ui, ' ', { repeat: true });
+  assert.equal(ui.$('#card').classList.contains('is-flipped'), true);
+  pressKey(ui, 'ArrowRight');
+  assert.equal(ui.$('#position').textContent, '2 / 2');
+  assert.equal(ui.$('#card').classList.contains('is-flipped'), false);
+  pressKey(ui, 'ArrowRight');
+  assert.equal(ui.$('#position').textContent, '2 / 2');
+  pressKey(ui, ' ', { target: ui.$('#next') });
+  assert.equal(ui.$('#card').classList.contains('is-flipped'), true);
+  pressKey(ui, ' ');
+  assert.equal(ui.$('#card').classList.contains('is-flipped'), false);
+  pressKey(ui, 'ArrowLeft', { repeat: true });
+  assert.equal(ui.$('#position').textContent, '2 / 2');
+  pressKey(ui, 'ArrowLeft');
+  assert.equal(ui.$('#position').textContent, '1 / 2');
+  ui.language('es');
+  assert.match(ui.$('#cardFooter').textContent, /Espacio/);
+});
+
+void test('S 切换当前词星标，长按不重复切换，输入和造句不误触', () => {
+  const ui = createUI();
+  const star = ui.$('#cardStar');
+  assert.equal(star.attrs['aria-pressed'], 'false');
+  assert.equal(pressKey(ui, 's'), true);
+  assert.equal(star.attrs['aria-pressed'], 'true');
+  pressKey(ui, 's', { repeat: true });
+  assert.equal(star.attrs['aria-pressed'], 'true');
+  pressKey(ui, 'S', { target: star });
+  assert.equal(star.attrs['aria-pressed'], 'false');
+  for (const options of [
+    { target: ui.$('#cloudCode') },
+    { target: ui.$('#musicNext') },
+    { target: { isContentEditable: true } },
+    { ctrlKey: true },
+    { metaKey: true },
+    { shiftKey: true },
+    { isComposing: true },
+  ]) {
+    assert.equal(pressKey(ui, 's', options), false);
+  }
+  assert.equal(star.attrs['aria-pressed'], 'false');
+  ui.$('#drawTab').click();
+  assert.equal(pressKey(ui, 's'), false);
+  ui.$('#cardsTab').click();
+  pressKey(ui, 's');
+  assert.equal(star.attrs['aria-pressed'], 'true');
+  assert.equal(star.attrs['aria-keyshortcuts'], 's');
+  ui.language('es');
+  assert.match(ui.$('#cardFooter').textContent, /S Favorita/);
+});
+
+void test('快捷键不干扰输入、音乐、其他按钮、组合键和造句视图', async () => {
+  const ui = createUI();
+  const position = ui.$('#position').textContent;
+  const protectedTargets = [
+    ui.$('#languageSelect'),
+    ui.$('#drawCount'),
+    ui.$('#studyMusic'),
+    ui.$('#musicNext'),
+    ui.$('#cardStar'),
+    ui.$('#musicWidget'),
+    { isContentEditable: true },
+    { parentNode: { isContentEditable: true } },
+    { tagName: 'TEXTAREA' },
+    { tagName: 'A' },
+  ];
+  for (const target of protectedTargets) {
+    for (const key of ['ArrowLeft', 'ArrowRight', ' '])
+      assert.equal(pressKey(ui, key, { target }), false);
+  }
+  for (const guard of [
+    'altKey',
+    'ctrlKey',
+    'metaKey',
+    'shiftKey',
+    'isComposing',
+    'defaultPrevented',
+  ])
+    assert.equal(pressKey(ui, 'ArrowRight', { [guard]: true }), false);
+  assert.equal(pressKey(ui, 'ArrowRight', { keyCode: 229 }), false);
+  assert.equal(
+    pressKey(ui, 'ArrowRight', { composedPath: () => [ui.$('#studyMusic')] }),
+    false,
+  );
+  assert.equal(ui.$('#position').textContent, position);
+  assert.equal(ui.$('#card').classList.contains('is-flipped'), false);
+  ui.$('#drawTab').click();
+  assert.equal(pressKey(ui, ' '), false);
+  assert.equal(pressKey(ui, 'ArrowRight'), false);
+  ui.$('#cardsTab').click();
+  // The importer rejects an empty library; also protect any disabled card state.
+  ui.$('#card').disabled = true;
+  assert.equal(pressKey(ui, ' '), false);
+});
 
 const csvFile = (name, text) => ({
   name,
@@ -398,6 +516,10 @@ function attachMusic(ui, deviceVolume = false, options) {
     calls.play++;
     audio.paused = false;
     audio.listeners.playing();
+  };
+  audio.pause = () => {
+    audio.paused = true;
+    audio.listeners.pause();
   };
   audio.load = () => {
     calls.load++;
@@ -469,12 +591,15 @@ void test('收起按钮、Esc 和点击面板外都只关闭控件，不中断�
   assert.deepEqual(plain(ui.studyApp.capture()), before);
 });
 
-void test('BGM 使用连续混音 AAC，默认关闭、按需加载、原生控制并循环', () => {
+void test('BGM 使用连续混音 AAC，默认关闭、按需加载并保留原生控件回退', () => {
   const ui = createUI({ savedLocale: 'en' });
   const { audio, calls } = attachMusic(ui);
   assert.equal(audio.attrs.src, PLAYLIST.src);
   assert.equal(audio.attrs.preload, 'none');
   assert(Object.hasOwn(audio.attrs, 'controls'));
+  assert.equal(audio.controls, false);
+  assert.equal(audio.hidden, true);
+  assert.equal(ui.$('#musicControls').hidden, false);
   assert(Object.hasOwn(audio.attrs, 'loop'));
   assert(!Object.hasOwn(audio.attrs, 'autoplay'));
   assert.equal(audio.volume, 0.35);
@@ -491,6 +616,113 @@ void test('BGM 使用连续混音 AAC，默认关闭、按需加载、原生控�
   );
 });
 
+void test('主题化音乐控件支持播放暂停、三语状态及音量静音', async () => {
+  const ui = createUI();
+  const { audio, calls } = attachMusic(ui);
+  assert.equal(ui.$('#musicPlay').attrs['aria-label'], '播放音乐');
+  await ui.$('#musicPlay').click();
+  assert.equal(calls.play, 1);
+  assert.equal(ui.$('#musicWidget').dataset.playing, 'true');
+  assert.equal(ui.$('#musicPlay').attrs['aria-label'], '暂停音乐');
+  ui.language('es');
+  assert.equal(ui.$('#musicPlay').attrs['aria-label'], 'Pausar música');
+  assert.equal(
+    ui.$('#musicSeek').attrs['aria-label'],
+    'Posición de reproducción',
+  );
+  await ui.$('#musicPlay').click();
+  assert.equal(audio.paused, true);
+  const volume = ui.$('#musicVolume');
+  volume.value = '70';
+  volume.listeners.input();
+  assert.equal(audio.volume, 0.7);
+  ui.$('#musicMute').click();
+  assert.equal(audio.muted, true);
+  assert.equal(ui.$('#musicMute').attrs['aria-pressed'], 'true');
+  ui.$('#musicMute').click();
+  assert.equal(audio.muted, false);
+  assert.equal(audio.volume, 0.7);
+  volume.value = '0';
+  volume.listeners.input();
+  ui.$('#musicMute').click();
+  assert.equal(audio.volume, 0.35);
+  assert.equal(audio.muted, false);
+  ui.language('en');
+  assert.equal(ui.$('#musicMute').attrs['aria-label'], 'Mute');
+  assert.equal(calls.load, 0);
+});
+
+void test('音乐进度缺少元数据时禁用，拖动优先于时间更新和延迟切歌', async () => {
+  const ui = createUI(),
+    fader = musicFader();
+  const { audio } = attachMusic(ui, false, fader.options);
+  const seek = ui.$('#musicSeek');
+  audio.readyState = 0;
+  audio.duration = NaN;
+  audio.listeners.durationchange();
+  assert.equal(seek.disabled, true);
+  assert.equal(ui.$('#musicDuration').textContent, '—:—');
+  audio.readyState = 4;
+  audio.duration = PLAYLIST.duration;
+  audio.listeners.loadedmetadata();
+  assert.equal(seek.disabled, false);
+  audio.paused = false;
+  await ui.$('#musicNext').click();
+  seek.value = '90';
+  seek.listeners.input();
+  audio.currentTime = 20;
+  audio.listeners.timeupdate();
+  assert.equal(seek.value, '90');
+  assert.equal(ui.$('#musicElapsed').textContent, '1:30');
+  seek.listeners.change();
+  fader.flush();
+  assert.equal(audio.currentTime, 90);
+  seek.value = 'NaN';
+  seek.listeners.change();
+  assert.equal(audio.currentTime, 90);
+  seek.value = String(PLAYLIST.duration + 100);
+  seek.listeners.change();
+  assert.equal(audio.currentTime, PLAYLIST.duration - 0.05);
+});
+
+void test('设备接管音量时隐藏无效控件，播放失败可重试且不会触发未处理拒绝', async () => {
+  const ui = createUI();
+  const { audio } = attachMusic(ui, true);
+  assert.equal(ui.$('#musicVolumeControls').hidden, true);
+  assert.equal(ui.$('#musicVolumeHint').hidden, false);
+  audio.play = async () => {
+    throw new Error('Network unavailable');
+  };
+  await ui.$('#musicPlay').click();
+  assert.equal(ui.$('#musicError').hidden, false);
+  assert.equal(ui.$('#musicPlay').attrs['aria-busy'], 'false');
+  audio.play = async () => {
+    audio.paused = false;
+    audio.listeners.playing();
+  };
+  await ui.$('#musicRetry').click();
+  assert.equal(ui.$('#musicError').hidden, true);
+  assert.equal(ui.$('#musicWidget').dataset.playing, 'true');
+});
+
+void test('加载中再次点击播放会取消，不重复播放或把取消显示为网络错误', async () => {
+  const ui = createUI();
+  const { audio } = attachMusic(ui);
+  let rejectPlay;
+  audio.play = () =>
+    new Promise((_, reject) => {
+      rejectPlay = reject;
+    });
+  const pending = ui.$('#musicPlay').click();
+  assert.equal(ui.$('#musicPlay').attrs['aria-busy'], 'true');
+  await ui.$('#musicPlay').click();
+  rejectPlay(Object.assign(new Error('Cancelled'), { name: 'AbortError' }));
+  await pending;
+  assert.equal(audio.paused, true);
+  assert.equal(ui.$('#musicError').hidden, true);
+  assert.equal(ui.$('#musicPlay').attrs['aria-busy'], 'false');
+});
+
 void test('播放列表覆盖 audio 全部原曲，章节有序且处于连续音轨范围内', () => {
   const originals = readdirSync(new URL('../audio/', import.meta.url)).filter(
     (name) =>
@@ -502,10 +734,15 @@ void test('播放列表覆盖 audio 全部原曲，章节有序且处于连续�
     originals.sort(),
   );
   assert(PLAYLIST.tracks.length > 1);
-  assert.equal(new Set(PLAYLIST.tracks.map((track) => track.id)).size, originals.length);
+  assert.equal(
+    new Set(PLAYLIST.tracks.map((track) => track.id)).size,
+    originals.length,
+  );
   assert.deepEqual(
     PLAYLIST.tracks.map(({ id, original, title }) => ({ id, original, title })),
-    JSON.parse(readFileSync(new URL('../audio/tracks.json', import.meta.url), 'utf8')),
+    JSON.parse(
+      readFileSync(new URL('../audio/tracks.json', import.meta.url), 'utf8'),
+    ),
   );
   assert.equal(PLAYLIST.crossfade, 3);
   for (const [index, track] of PLAYLIST.tracks.entries()) {
@@ -527,7 +764,10 @@ void test('连续播放的当前曲目在交叉淡化中点更新，最后一首
     assert.equal(trackAtTime(switchAt - 0.01), index - 1);
     assert.equal(trackAtTime(switchAt), index);
   }
-  assert.equal(trackAtTime(PLAYLIST.loopSwitchAt - 0.01), PLAYLIST.tracks.length - 1);
+  assert.equal(
+    trackAtTime(PLAYLIST.loopSwitchAt - 0.01),
+    PLAYLIST.tracks.length - 1,
+  );
   assert.equal(trackAtTime(PLAYLIST.loopSwitchAt), 0);
   assert.equal(trackAtTime(PLAYLIST.duration), 0);
 });
