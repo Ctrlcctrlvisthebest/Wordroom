@@ -1,4 +1,4 @@
-export const FIELDS = ['word', 'meaning', 'example', 'phrase'];
+export const FIELDS = ['word', 'meaning', 'example', 'phrase', 'association'];
 export const OPTIONAL_FIELDS = FIELDS.slice(1);
 export const MAX_CSV_BYTES = 5 * 1024 * 1024;
 export const MAX_CSV_ROWS = 20000;
@@ -49,6 +49,12 @@ export const TRANSLATIONS = {
     field_meaning: '释义',
     field_example: '例句',
     field_phrase: '搭配词组',
+    field_association: '联想',
+    reviewScope: '复习范围',
+    reviewAllSources: '全部 CSV',
+    reviewStarred: '仅星标词',
+    reviewCount: '本次范围：{count} 个词',
+    reviewEmpty: '这个范围没有单词。试试取消“仅星标词”或选择其他 CSV。',
     column: '第 {number} 列',
     cards: '随机卡片',
     drawPractice: '抽词练习',
@@ -138,6 +144,13 @@ export const TRANSLATIONS = {
     field_meaning: 'Meaning',
     field_example: 'Example',
     field_phrase: 'Collocation',
+    field_association: 'Association',
+    reviewScope: 'Review scope',
+    reviewAllSources: 'All CSV files',
+    reviewStarred: 'Starred only',
+    reviewCount: '{count} words in this scope',
+    reviewEmpty:
+      'No words in this scope. Turn off Starred only or choose another CSV.',
     column: 'Column {number}',
     cards: 'Random cards',
     drawPractice: 'Writing practice',
@@ -230,6 +243,13 @@ export const TRANSLATIONS = {
     field_meaning: 'Significado',
     field_example: 'Ejemplo',
     field_phrase: 'Colocación',
+    field_association: 'Asociación',
+    reviewScope: 'Palabras para repasar',
+    reviewAllSources: 'Todos los CSV',
+    reviewStarred: 'Solo favoritas',
+    reviewCount: '{count} palabras en este grupo',
+    reviewEmpty:
+      'No hay palabras en este grupo. Desmarca Solo favoritas o elige otro CSV.',
     column: 'Columna {number}',
     cards: 'Tarjetas aleatorias',
     drawPractice: 'Práctica de escritura',
@@ -435,6 +455,15 @@ export function detectMapping(headers, fallbackWord = 0) {
       'colocación',
       'colocacion',
     ]),
+    association: find([
+      'association',
+      'mnemonic',
+      '联想',
+      '助记',
+      'asociación',
+      'asociacion',
+      'mnemotecnia',
+    ]),
   };
 }
 
@@ -444,20 +473,11 @@ export function createWords(rows, mapping) {
   rows.forEach((row, sourceIndex) => {
     const word = String(row[mapping.word] ?? '').trim();
     if (!word) return;
-    words.push({
-      sourceIndex,
-      word,
-      meaning:
-        mapping.meaning == null
-          ? ''
-          : String(row[mapping.meaning] ?? '').trim(),
-      example:
-        mapping.example == null
-          ? ''
-          : String(row[mapping.example] ?? '').trim(),
-      phrase:
-        mapping.phrase == null ? '' : String(row[mapping.phrase] ?? '').trim(),
-    });
+    const entry = { sourceIndex, word };
+    for (const field of OPTIONAL_FIELDS)
+      entry[field] =
+        mapping[field] == null ? '' : String(row[mapping[field]] ?? '').trim();
+    words.push(entry);
   });
   return words;
 }
@@ -525,9 +545,33 @@ export function escapeHTML(value) {
   );
 }
 
+export function filterReviewWords(words, sources, starred, scope) {
+  let start = 0,
+    end = Infinity;
+  if (Number.isInteger(scope.source)) {
+    if (!sources[scope.source]) return [];
+    start = sources
+      .slice(0, scope.source)
+      .reduce((sum, source) => sum + source.rows.length, 0);
+    end = start + sources[scope.source].rows.length;
+  }
+  return words.filter(
+    (word) =>
+      word.sourceIndex >= start &&
+      word.sourceIndex < end &&
+      (!scope.starredOnly || starred.has(word.sourceIndex)),
+  );
+}
+
 function startApp() {
   const $ = (selector) => document.querySelector(selector);
   const importListeners = new Set();
+  const changeListeners = new Set();
+  let contentChangeId = 0;
+  const notify = (cloud = false) => {
+    if (cloud) contentChangeId++;
+    changeListeners.forEach((listener) => listener({ cloud }));
+  };
   const savedLocale = (() => {
     try {
       const value = localStorage.getItem('wordroom-language');
@@ -552,7 +596,9 @@ function startApp() {
     sources: [
       {
         name: '示例词库.csv',
-        headers: [...FIELDS],
+        headers: FIELDS.filter((field) =>
+          Object.hasOwn(SAMPLE_WORDS[0], field),
+        ),
         rows: SAMPLE_WORDS.map((item) => [
           item.word,
           item.meaning,
@@ -568,9 +614,13 @@ function startApp() {
     messageKey: '',
     messageFile: '',
     isSample: true,
+    scope: { source: 'all', starredOnly: false },
+    view: 'cards',
   };
   const t = (key, variables) => translate(state.locale, key, variables);
   const activeSource = () => state.sources[state.activeSource];
+  const reviewWords = () =>
+    filterReviewWords(state.words, state.sources, state.starred, state.scope);
   const showMessage = (key = '', file = '') => {
     state.messageKey = key;
     state.messageFile = file;
@@ -582,8 +632,9 @@ function startApp() {
   };
 
   function syncControls() {
-    const total = state.words.length;
-    $('#count').textContent = t('wordCount', { count: total });
+    const total = reviewWords().length;
+    $('#count').textContent = t('wordCount', { count: state.words.length });
+    $('#reviewCount').textContent = t('reviewCount', { count: total });
     $('#drawCount').max = Math.max(1, total);
     $('#drawCount').value = clampCount($('#drawCount').value, total) || 1;
     $('#drawCount').disabled = !total;
@@ -639,6 +690,8 @@ function startApp() {
     $('#flip').textContent = `↻ ${t('flip')}`;
     $('#next').textContent = `${t('next')} →`;
     $('#cardFooter').textContent = t('cardFooter');
+    $('#reviewScopeLabel').textContent = t('reviewScope');
+    $('#reviewStarredLabel').textContent = t('reviewStarred');
     $('#drawTitle').textContent = t('drawTitle');
     $('#drawHint').textContent = t('drawHint');
     $('#drawLabel').textContent = t('drawLabel');
@@ -648,6 +701,7 @@ function startApp() {
     $('#drawPagePrev').textContent = t('previous');
     $('#drawPageNext').textContent = t('next');
     renderSources();
+    renderScope();
     showMessage(state.messageKey, state.messageFile);
     syncControls();
     updateExportButton();
@@ -667,6 +721,28 @@ function startApp() {
     updateStarButton($('#cardStar'), state.deck[state.index]);
     const visibleStar = $(`[data-star="${sourceIndex}"]`);
     if (visibleStar) updateStarButton(visibleStar, word);
+    if (state.scope.starredOnly) {
+      const allowed = new Set(reviewWords().map((item) => item.sourceIndex));
+      const current = state.deck[state.index]?.sourceIndex;
+      state.deck = state.deck.filter((item) => allowed.has(item.sourceIndex));
+      const remaining = new Set(state.deck.map((item) => item.sourceIndex));
+      state.deck.push(
+        ...reviewWords().filter((item) => !remaining.has(item.sourceIndex)),
+      );
+      const position = state.deck.findIndex(
+        (item) => item.sourceIndex === current,
+      );
+      state.index =
+        position >= 0
+          ? position
+          : Math.max(0, Math.min(state.index, state.deck.length - 1));
+      if (position < 0) state.flipped = false;
+      state.drawn = state.drawn.filter((item) => allowed.has(item.sourceIndex));
+      renderCard();
+      renderDraw();
+    }
+    syncControls();
+    notify(true);
   }
 
   function updateStarButton(button, word) {
@@ -741,7 +817,7 @@ function startApp() {
   }
 
   function resetDeck() {
-    state.deck = shuffled(state.words);
+    state.deck = shuffled(reviewWords());
     state.index = 0;
     state.flipped = false;
   }
@@ -819,6 +895,38 @@ function startApp() {
     showMessage();
     renderMapping();
     rebuildDeck(words, preservePractice);
+    notify(true);
+  }
+
+  function renderScope() {
+    $('#reviewSource').innerHTML =
+      `<option value="all">${t('reviewAllSources')}</option>` +
+      state.sources
+        .map(
+          (source, index) =>
+            `<option value="${index}">${index + 1}. ${escapeHTML(state.isSample ? t('sampleFile') : source.name)}</option>`,
+        )
+        .join('');
+    $('#reviewSource').value = String(state.scope.source);
+    $('#reviewStarred').checked = state.scope.starredOnly;
+  }
+
+  function changeScope() {
+    const value = $('#reviewSource').value;
+    const source = value === 'all' ? 'all' : Number(value);
+    if (
+      source !== 'all' &&
+      (!Number.isInteger(source) || !state.sources[source])
+    ) {
+      renderScope();
+      return;
+    }
+    state.scope = { source, starredOnly: $('#reviewStarred').checked };
+    resetDeck();
+    drawWords(false);
+    syncControls();
+    renderCard();
+    notify();
   }
 
   function renderSources() {
@@ -904,7 +1012,8 @@ function startApp() {
     updateStarButton($('#cardStar'), current);
     if (!current) {
       $('#card').disabled = true;
-      $('#card').innerHTML = `<span class="muted">${t('importWords')}</span>`;
+      $('#card').innerHTML =
+        `<span class="muted">${t(state.words.length ? 'reviewEmpty' : 'importWords')}</span>`;
       return;
     }
     $('#card').disabled = false;
@@ -963,15 +1072,17 @@ function startApp() {
       textarea.addEventListener('input', () => {
         state.changeId++;
         state.answers.set(Number(textarea.dataset.answer), textarea.value);
+        notify();
       }),
     );
   }
 
-  function drawWords() {
-    const count = clampCount($('#drawCount').value, state.words.length);
+  function drawWords(clearAnswers = true) {
+    const candidates = reviewWords();
+    const count = clampCount($('#drawCount').value, candidates.length);
     $('#drawCount').value = count || 1;
-    state.drawn = shuffled(state.words).slice(0, count);
-    state.answers.clear();
+    state.drawn = shuffled(candidates).slice(0, count);
+    if (clearAnswers) state.answers.clear();
     state.drawPage = 0;
     renderDraw();
   }
@@ -1061,11 +1172,14 @@ function startApp() {
       state.changeId++;
       state.importId++;
       if (!append) state.starred.clear();
+      if (!append) state.scope = { source: 'all', starredOnly: false };
       state.exportOpen = false;
       renderSources();
+      renderScope();
       renderMapping();
       rebuildDeck(words, false, append);
       importListeners.forEach((listener) => listener());
+      notify(true);
     } catch (error) {
       if (loadId !== state.loadId) return;
       const errorKey =
@@ -1108,11 +1222,13 @@ function startApp() {
     }
     state.activeSource = index;
     renderMapping();
+    notify();
   });
   const flip = () => {
     if (state.deck[state.index]) {
       state.flipped = !state.flipped;
       renderCard();
+      notify();
     }
   };
   $('#card').addEventListener('click', flip);
@@ -1136,20 +1252,24 @@ function startApp() {
       localStorage.setItem('wordroom-language', locale);
     } catch {}
     applyLanguage();
+    notify();
   });
   $('#prev').addEventListener('click', () => {
     state.index = Math.max(0, state.index - 1);
     state.flipped = false;
     renderCard();
+    notify();
   });
   $('#next').addEventListener('click', () => {
     state.index = Math.min(state.deck.length - 1, state.index + 1);
     state.flipped = false;
     renderCard();
+    notify();
   });
   $('#shuffleBtn').addEventListener('click', () => {
     resetDeck();
     renderCard();
+    notify();
   });
   document.querySelectorAll('[data-include]').forEach((checkbox) =>
     checkbox.addEventListener('change', () => {
@@ -1170,6 +1290,7 @@ function startApp() {
     }),
   );
   function switchView(view) {
+    state.view = view;
     const cards = view === 'cards';
     $('#cardsView').classList.toggle('hide', !cards);
     $('#drawView').classList.toggle('hide', cards);
@@ -1179,30 +1300,49 @@ function startApp() {
     $('#drawTab').setAttribute('aria-pressed', String(!cards));
     $('#shuffleBtn').classList.toggle('hide', !cards);
   }
-  $('#cardsTab').addEventListener('click', () => switchView('cards'));
-  $('#drawTab').addEventListener('click', () => switchView('draw'));
+  $('#cardsTab').addEventListener('click', () => {
+    switchView('cards');
+    notify();
+  });
+  $('#drawTab').addEventListener('click', () => {
+    switchView('draw');
+    notify();
+  });
+  $('#reviewSource').addEventListener('change', changeScope);
+  $('#reviewStarred').addEventListener('change', changeScope);
   $('#drawCount').addEventListener('change', () => {
     $('#drawCount').value =
-      clampCount($('#drawCount').value, state.words.length) || 1;
+      clampCount($('#drawCount').value, reviewWords().length) || 1;
+    notify();
   });
-  $('#drawBtn').addEventListener('click', drawWords);
+  $('#drawBtn').addEventListener('click', () => {
+    drawWords();
+    notify();
+  });
   $('#drawPagePrev').addEventListener('click', () => {
     state.drawPage--;
     renderDraw();
+    notify();
   });
   $('#drawPageNext').addEventListener('click', () => {
     state.drawPage++;
     renderDraw();
+    notify();
   });
   // Start compact on phones, then leave the disclosure under user control.
   if (window.matchMedia('(max-width: 760px)').matches) {
     $('#libraryPanel').open = false;
   }
   applyLanguage();
-  return {
+  const api = {
     getLocale: () => state.locale,
     getChangeId: () => state.changeId,
+    getContentChangeId: () => contentChangeId,
     getImportId: () => state.importId,
+    onChange: (listener) => {
+      changeListeners.add(listener);
+      return () => changeListeners.delete(listener);
+    },
     onImport: (listener) => {
       importListeners.add(listener);
       return () => importListeners.delete(listener);
@@ -1244,9 +1384,11 @@ function startApp() {
       state.exportOpen = false;
       state.fileName = snapshot.name;
       state.isSample = false;
+      state.scope = { source: 'all', starredOnly: false };
       state.starred.clear();
       showMessage();
       renderSources();
+      renderScope();
       renderMapping();
       rebuildDeck(words);
       state.starred = new Set(snapshot.starred);
@@ -1254,8 +1396,50 @@ function startApp() {
       renderCard();
       renderDraw();
       importListeners.forEach((listener) => listener());
+      notify(true);
+    },
+    captureSession: (includeLibrary = true) => ({
+      ...(includeLibrary ? { library: api.capture() } : {}),
+      progress: {
+        deck: state.deck.map((word) => word.sourceIndex),
+        drawn: state.drawn.map((word) => word.sourceIndex),
+        answers: [...state.answers],
+        index: state.index,
+        flipped: state.flipped,
+        drawPage: state.drawPage,
+        view: state.view,
+        scope: { ...state.scope },
+        activeSource: state.activeSource,
+        isSample: state.isSample,
+        drawCount: clampCount($('#drawCount').value, reviewWords().length) || 1,
+      },
+    }),
+    restoreSession: (validated, progress) => {
+      api.restore(validated);
+      const byIndex = new Map(
+        state.words.map((word) => [word.sourceIndex, word]),
+      );
+      state.deck = progress.deck.map((index) => byIndex.get(index));
+      state.drawn = progress.drawn.map((index) => byIndex.get(index));
+      state.answers = new Map(progress.answers);
+      state.index = progress.index;
+      state.flipped = progress.flipped;
+      state.drawPage = progress.drawPage;
+      state.scope = { ...progress.scope };
+      state.activeSource = progress.activeSource;
+      state.isSample = progress.isSample;
+      $('#drawCount').value = progress.drawCount;
+      switchView(progress.view);
+      renderSources();
+      renderScope();
+      renderMapping();
+      syncControls();
+      renderCard();
+      renderDraw();
+      notify(true);
     },
   };
+  return api;
 }
 
 export const studyApp =

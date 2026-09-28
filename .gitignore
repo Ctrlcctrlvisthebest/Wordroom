@@ -40,3 +40,5 @@ next-env.d.ts
 /work/
 /site*.tar.gz
 *.tsbuildinfo
+__pycache__/
+*.pyc

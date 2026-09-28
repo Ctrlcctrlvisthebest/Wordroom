@@ -2,7 +2,48 @@ import {
   MAX_CLOUD_BYTES,
   validateSnapshot,
   validSyncCode,
-} from './cloud-data.js?v=multi1';
+} from './cloud-data.js?v=optimization1';
+
+const ERROR_CODES = new Set([
+  'invalidCode',
+  'invalidSnapshot',
+  'invalidResponse',
+  'cloudTooLarge',
+  'quotaExceeded',
+  'conflict',
+  'notFound',
+  'rateLimited',
+  'timeout',
+  'serverError',
+  'networkError',
+  'originDenied',
+  'notConfigured',
+  'invalidRequest',
+  'methodNotAllowed',
+  'preconditionRequired',
+]);
+
+// Do not expose arbitrary server bodies, request URLs, or credentials in errors.
+export function cloudErrorCode(error) {
+  return ERROR_CODES.has(error?.message) ? error.message : 'serverError';
+}
+
+function requestError(code, status = 0) {
+  const error = new Error(ERROR_CODES.has(code) ? code : 'serverError');
+  if (Number.isInteger(status) && status >= 400 && status <= 599)
+    error.status = status;
+  return error;
+}
+
+export function uncertainSave(error) {
+  return [
+    'timeout',
+    'networkError',
+    'serverError',
+    'invalidResponse',
+    'conflict',
+  ].includes(cloudErrorCode(error));
+}
 
 export class CloudClient {
   constructor(baseURL, code, fetcher = globalThis.fetch.bind(globalThis)) {
@@ -41,15 +82,21 @@ export class CloudClient {
         MAX_CLOUD_BYTES + 65536
       )
         throw new Error('invalidResponse');
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(
-          typeof data?.error === 'string' ? data.error : 'serverError',
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw requestError(
+          response.ok ? 'invalidResponse' : 'serverError',
+          response.status,
         );
+      }
+      if (!response.ok) throw requestError(data?.error, response.status);
       return data;
     } catch (error) {
-      if (error?.name === 'AbortError') throw new Error('timeout');
-      throw error;
+      if (error?.name === 'AbortError') throw requestError('timeout');
+      if (error instanceof TypeError) throw requestError('networkError');
+      throw requestError(cloudErrorCode(error), error?.status);
     } finally {
       clearTimeout(timer);
     }

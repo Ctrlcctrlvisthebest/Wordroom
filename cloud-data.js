@@ -4,7 +4,7 @@ import {
   MAX_CSV_COLUMNS,
   MAX_CSV_SOURCES,
   combineSourceWords,
-} from './wordroom.js?v=multi1';
+} from './wordroom.js?v=optimization1';
 
 export const MAX_CLOUD_BYTES = 10 * 1024 * 1024;
 export const MAX_CLOUD_LISTS = 20;
@@ -54,6 +54,8 @@ function validateSource(value) {
     invalid();
   const used = new Set();
   for (const field of FIELDS) {
+    // Older saved lists predate associations; absence means not included.
+    if (field === 'association' && !Object.hasOwn(mapping, field)) continue;
     const column = mapping[field];
     if (column === null && field !== 'word') continue;
     if (
@@ -70,7 +72,12 @@ function validateSource(value) {
     name,
     headers,
     rows,
-    mapping: Object.fromEntries(FIELDS.map((field) => [field, mapping[field]])),
+    mapping: Object.fromEntries(
+      FIELDS.filter((field) => Object.hasOwn(mapping, field)).map((field) => [
+        field,
+        mapping[field],
+      ]),
+    ),
   };
 }
 

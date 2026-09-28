@@ -1,0 +1,26 @@
+# Optional GitHub Actions template. Requires workflow-write authorization to enable.
+name: Validate Wordroom (no deployment)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-and-cloud-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run verify:static
+      - name: Test music generator without rendering or network
+        run: python3 -B -m unittest discover -s tests -p 'test_*.py'
+      - name: Check latest commit whitespace
+        run: git show --format= --check --first-parent HEAD

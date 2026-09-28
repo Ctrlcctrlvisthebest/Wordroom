@@ -1,4 +1,4 @@
-import { studyApp } from './wordroom.js?v=multi1';
+import { studyApp } from './wordroom.js?v=optimization1';
 
 const UI_TEXT = {
   zh: {

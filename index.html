@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="./feedback.css" />
     <link rel="stylesheet" href="./wordroom-cloud.css" />
     <link rel="stylesheet" href="./wordroom-music.css?v=4" />
+    <link rel="stylesheet" href="./wordroom-progress.css?v=1" />
   </head>
   <body data-ui="classic">
     <header id="siteHeader" class="site-header">
@@ -82,6 +83,38 @@
             </svg>
           </summary>
           <div class="library-content">
+            <section
+              class="local-progress"
+              aria-labelledby="localProgressTitle"
+            >
+              <h2 id="localProgressTitle" data-session-text="title">
+                本机进度
+              </h2>
+              <p class="muted" data-session-text="hint">
+                自动保存在此浏览器，不上传造句。公共设备上可关闭。
+              </p>
+              <label class="local-toggle"
+                ><input id="localRemember" type="checkbox" checked /><span
+                  data-session-text="remember"
+                  >本机记住进度</span
+                ></label
+              >
+              <p
+                id="localStatus"
+                class="muted"
+                role="status"
+                aria-live="polite"
+              ></p>
+              <button
+                id="localRetry"
+                class="btn alt"
+                type="button"
+                data-session-text="retry"
+                hidden
+              >
+                重试本机保存
+              </button>
+            </section>
             <section class="panel">
               <h2 id="importTitle">导入词表</h2>
               <div class="import-options">
@@ -153,6 +186,10 @@
                 <label
                   ><input type="checkbox" data-include="phrase" checked />
                   <span data-field-label="phrase">搭配词组</span></label
+                >
+                <label
+                  ><input type="checkbox" data-include="association" />
+                  <span data-field-label="association">联想</span></label
                 >
               </div>
               <div id="mapping"></div>
@@ -280,6 +317,7 @@
               role="status"
               aria-live="polite"
             ></p>
+            <p id="cloudSaveState" class="muted" aria-live="polite"></p>
           </div>
         </details>
       </aside>
@@ -298,6 +336,23 @@
           </button>
         </div>
         <div id="exportSources" class="export-sources hide"></div>
+        <div
+          class="review-scope"
+          role="group"
+          aria-labelledby="reviewScopeLabel"
+        >
+          <label id="reviewScopeLabel" for="reviewSource">复习范围</label>
+          <select id="reviewSource">
+            <option value="all">全部 CSV</option>
+          </select>
+          <label class="review-starred"
+            ><input id="reviewStarred" type="checkbox" /><span
+              id="reviewStarredLabel"
+              >仅星标词</span
+            ></label
+          >
+          <span id="reviewCount" class="muted" aria-live="polite"></span>
+        </div>
         <div id="cardsView">
           <div class="workspace-heading">
             <div>
@@ -418,7 +473,7 @@
           controls
           loop
           preload="none"
-          src="./audio/study-continuous-1d249d4246e4.m4a"
+          src="./audio/study-continuous-a44917c233bd.m4a"
           aria-labelledby="musicTitle musicTrack"
         >
           <span id="musicFallback">你的浏览器不支持音频播放。</span>
@@ -561,10 +616,11 @@
         <span>Found a bug or have an idea?</span>
       </div>
     </div>
-    <script type="module" src="./wordroom.js?v=multi1"></script>
+    <script type="module" src="./wordroom.js?v=optimization1"></script>
     <script type="module" src="./wordroom-shortcuts.js?v=2"></script>
-    <script type="module" src="./wordroom-ui.js?v=1"></script>
-    <script type="module" src="./wordroom-music.js?v=controls1"></script>
-    <script type="module" src="./wordroom-cloud.js?v=fetch-binding1"></script>
+    <script type="module" src="./wordroom-ui.js?v=optimization1"></script>
+    <script type="module" src="./wordroom-music.js?v=optimization1"></script>
+    <script type="module" src="./wordroom-cloud.js?v=optimization1"></script>
+    <script type="module" src="./wordroom-session.js?v=1"></script>
   </body>
 </html>

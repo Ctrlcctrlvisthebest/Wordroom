@@ -1,6 +1,14 @@
-import { studyApp, escapeHTML } from './wordroom.js?v=multi1';
-import { newSyncCode, validSyncCode } from './cloud-data.js?v=multi1';
-import { CloudClient } from './cloud-client.js?v=fetch-binding1';
+import { studyApp, escapeHTML } from './wordroom.js?v=optimization1';
+import {
+  newSyncCode,
+  validSyncCode,
+  validateSnapshot,
+} from './cloud-data.js?v=optimization1';
+import {
+  CloudClient,
+  cloudErrorCode,
+  uncertainSave,
+} from './cloud-client.js?v=optimization1';
 import { CLOUD_API_URL } from './cloud-config.js';
 
 export const CLOUD_TEXT = {
@@ -32,6 +40,27 @@ export const CLOUD_TEXT = {
       '已断开当前页面，但浏览器阻止清除同步码。公共设备上请清除此网站的浏览器数据。',
     saved: '词表和星标已保存到云端。',
     savedEarlier: '刚才的词表快照已保存；当前又有更改，请再次保存。',
+    unsaved: '已连接 · 当前词表尚未保存到云端。',
+    dirty: '已连接 · 有修改尚未保存到云端。',
+    clean: '已连接 · 当前词表和星标已保存。造句仅保存在本机。',
+    lastSaved: '最近确认的云端保存：',
+    pendingSave:
+      '上次保存结果尚未确认。请点击“刷新”核对；再次保存前也会先核对，不会重复新增副本。',
+    retrySave:
+      '未发现上次保存的新版本。可再次点击保存，将沿用同一副本编号，并检查版本冲突。',
+    pendingTemporary:
+      '浏览器无法记住待核对状态，请在核对完成前不要关闭或刷新页面。',
+    pendingSourceChanged:
+      '上次保存属于另一份词表，尚未确认。请先刷新核对，或打开对应云端词表；不会用当前新词表覆盖它。',
+    pendingElsewhere:
+      '另一个页面有尚未确认的保存。请先在那个页面核对结果，再刷新此页；当前词表未上传。',
+    incompatibleCloud:
+      '云端已收到词表，但未完整保留“联想”设置。请更新云端服务后再次保存；当前内容仍在本机，不会显示为已完整保存。',
+    networkError:
+      '暂时无法连接云端。请检查网络、代理或 VPN，以及 Cloudflare 的网站来源设置；本地练习不受影响。',
+    originDenied:
+      '云端不允许当前网站来源。请检查 Cloudflare 的 ALLOWED_ORIGINS 设置。',
+    diagnostic: '诊断代码：',
     loaded: '已打开云端词表，星标已恢复。',
     deleted: '已删除云端副本，当前练习不受影响。',
     copied: '同步码已复制。请保存在安全的地方，不要公开分享。',
@@ -92,6 +121,28 @@ export const CLOUD_TEXT = {
     saved: 'Words and stars saved to the cloud.',
     savedEarlier:
       'The earlier snapshot was saved. You made more changes; save again to include them.',
+    unsaved: 'Connected · This list has not been saved to the cloud.',
+    dirty: 'Connected · Changes have not been saved to the cloud.',
+    clean:
+      'Connected · Words and stars are saved. Sentence drafts stay on this device.',
+    lastSaved: 'Last confirmed cloud save: ',
+    pendingSave:
+      'The last save is unconfirmed. Refresh to check; saving again also checks first and will not create a duplicate copy.',
+    retrySave:
+      'The last save has not appeared. Save again to reuse the same copy ID with version-conflict protection.',
+    pendingTemporary:
+      'This browser cannot remember the pending check. Do not close or reload until the save is verified.',
+    pendingSourceChanged:
+      'The unconfirmed save belongs to a different list. Refresh to verify it or open that cloud list first. This new list will not replace it.',
+    pendingElsewhere:
+      'Another page has an unconfirmed save. Verify it there, then refresh this page. Your current list was not uploaded.',
+    incompatibleCloud:
+      'The cloud received the list but did not retain all association settings. Update the cloud service and save again. Local content is safe and will not be marked fully saved.',
+    networkError:
+      'Cloud connection failed. Check the network, proxy or VPN, and the Cloudflare allowed-origin setting. Local practice is safe.',
+    originDenied:
+      'The cloud does not allow this website origin. Check ALLOWED_ORIGINS in Cloudflare.',
+    diagnostic: 'Diagnostic code: ',
     loaded: 'Cloud list opened and stars restored.',
     deleted: 'Cloud copy deleted. Your current practice is unchanged.',
     copied: 'Code copied. Keep it safe and do not share it publicly.',
@@ -159,6 +210,28 @@ export const CLOUD_TEXT = {
     saved: 'Palabras y favoritas guardadas en la nube.',
     savedEarlier:
       'Se guardó la versión anterior. Hay cambios nuevos; vuelve a guardar para incluirlos.',
+    unsaved: 'Conectado · Esta lista aún no se ha guardado en la nube.',
+    dirty: 'Conectado · Hay cambios sin guardar en la nube.',
+    clean:
+      'Conectado · Palabras y favoritas guardadas. Los borradores se quedan en este dispositivo.',
+    lastSaved: 'Último guardado confirmado: ',
+    pendingSave:
+      'El último guardado no está confirmado. Actualiza para comprobarlo; al volver a guardar también se comprobará primero, sin crear copias duplicadas.',
+    retrySave:
+      'El último guardado no aparece. Vuelve a guardar para usar el mismo identificador con protección contra conflictos de versión.',
+    pendingTemporary:
+      'El navegador no puede recordar la comprobación pendiente. No cierres ni recargues hasta verificar el guardado.',
+    pendingSourceChanged:
+      'El guardado pendiente corresponde a otra lista. Actualiza para verificarlo o abre esa lista de la nube. Esta nueva lista no la sustituirá.',
+    pendingElsewhere:
+      'Otra página tiene un guardado sin confirmar. Verifícalo allí y actualiza esta página. La lista actual no se ha subido.',
+    incompatibleCloud:
+      'La nube recibió la lista, pero no conservó todos los ajustes de asociación. Actualiza el servicio y vuelve a guardar. El contenido local está seguro y no se marcará como guardado completo.',
+    networkError:
+      'No se pudo conectar. Revisa la red, el proxy o VPN y los orígenes permitidos de Cloudflare. Tu práctica local sigue intacta.',
+    originDenied:
+      'La nube no permite el origen de este sitio. Revisa ALLOWED_ORIGINS en Cloudflare.',
+    diagnostic: 'Código de diagnóstico: ',
     loaded: 'Lista abierta y favoritas recuperadas.',
     deleted: 'Copia en la nube eliminada. Tu práctica actual no ha cambiado.',
     copied:
@@ -196,6 +269,33 @@ export const CLOUD_TEXT = {
   },
 };
 
+async function fingerprint(value) {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
+function snapshotFingerprint(snapshot) {
+  return fingerprint(validateSnapshot(snapshot).serialized);
+}
+
+function validPending(value) {
+  const uuid =
+    /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+  return (
+    value &&
+    uuid.test(value.id) &&
+    (value.revision === null || uuid.test(value.revision)) &&
+    (value.committedRevision === undefined ||
+      uuid.test(value.committedRevision)) &&
+    /^[a-f0-9]{64}$/.test(value.digest)
+  );
+}
+
 export function startCloud(
   app,
   {
@@ -219,16 +319,188 @@ export function startCloud(
     importId = -1,
     busy = false,
     statusKey = '',
-    statusError = false;
+    statusError = false,
+    diagnostic = '',
+    savedContentId = -1,
+    savedName = '',
+    lastSavedAt = 0,
+    pending = null,
+    pendingKey = '';
+  const contentId = () => app.getContentChangeId?.() ?? app.getChangeId();
   const text = (key) =>
     (CLOUD_TEXT[app.getLocale()] || CLOUD_TEXT.zh)[key] ||
     CLOUD_TEXT[app.getLocale()]?.serverError ||
     CLOUD_TEXT.zh.serverError;
-  function status(key, error = false) {
+  function status(key, error = false, detail = '') {
     statusKey = key;
     statusError = error;
-    $('#cloudStatus').textContent = key ? text(key) : '';
+    diagnostic = detail;
+    $('#cloudStatus').textContent =
+      (key ? text(key) : '') +
+      (detail ? ` ${text('diagnostic')}${detail}` : '');
     $('#cloudStatus').dataset.state = error ? 'error' : 'success';
+  }
+  function isDirty() {
+    return (
+      !current ||
+      importId !== app.getImportId() ||
+      savedContentId !== contentId() ||
+      savedName !== $('#cloudName').value.trim()
+    );
+  }
+  function renderSaveState() {
+    const node = $('#cloudSaveState');
+    if (!node) return;
+    const state = pending
+      ? pending.mappingMismatch
+        ? 'incompatibleCloud'
+        : pending.conflict
+          ? 'conflict'
+          : 'pendingSave'
+      : !current || importId !== app.getImportId()
+        ? 'unsaved'
+        : isDirty()
+          ? 'dirty'
+          : 'clean';
+    node.textContent = api ? text(state) : '';
+    if (api && lastSavedAt) {
+      const date = new Date(lastSavedAt).toLocaleString(app.getLocale());
+      node.textContent += ` ${text('lastSaved')}${date}`;
+    }
+    if (api && pending && !pending.durable)
+      node.textContent += ` ${text('pendingTemporary')}`;
+    node.dataset.state = state;
+  }
+  function samePending(left, right) {
+    return (
+      left &&
+      right &&
+      left.id === right.id &&
+      left.revision === right.revision &&
+      left.digest === right.digest
+    );
+  }
+  function storePending(operation) {
+    let readable = true;
+    try {
+      const existing = JSON.parse(storage.getItem(pendingKey) || 'null');
+      // A second tab must not replace the first tab's unresolved operation.
+      if (validPending(existing) && !samePending(existing, pending))
+        throw new Error('pendingElsewhere');
+    } catch (error) {
+      if (error?.message === 'pendingElsewhere') throw error;
+      readable = false;
+    }
+    pending = operation;
+    pending.durable = false;
+    if (!readable) return;
+    try {
+      // No vocabulary, list names, sync codes, or sentence drafts are stored here.
+      storage.setItem(
+        pendingKey,
+        JSON.stringify({
+          id: operation.id,
+          revision: operation.revision,
+          digest: operation.digest,
+          ...(operation.committedRevision
+            ? { committedRevision: operation.committedRevision }
+            : {}),
+        }),
+      );
+      pending.durable = true;
+    } catch {
+      pending.durable = false;
+    }
+  }
+  function clearPending() {
+    const operation = pending;
+    pending = null;
+    try {
+      const stored = JSON.parse(storage.getItem(pendingKey) || 'null');
+      if (samePending(stored, operation)) storage.removeItem(pendingKey);
+    } catch {}
+  }
+  function rememberCommitted(entry, operation) {
+    if (operation.sourceId === app.getImportId()) {
+      current = entry;
+      importId = operation.sourceId;
+      savedContentId = -1;
+      savedName = entry.name;
+    }
+    entries = [entry, ...entries.filter((row) => row.id !== entry.id)];
+  }
+  async function acceptSave(entry, operation) {
+    let sameSource = operation.sourceId === app.getImportId();
+    let checkpoint = operation.contentId;
+    // After a reload, only bind a recovered operation to matching local content.
+    if (operation.sourceId == null) {
+      const snapshot = app.capture();
+      snapshot.name = $('#cloudName').value.trim();
+      checkpoint = contentId();
+      const sourceId = app.getImportId();
+      try {
+        sameSource =
+          (await snapshotFingerprint(snapshot)) === operation.digest &&
+          sourceId === app.getImportId();
+      } catch {
+        // A newer local list can exceed the cloud limit; still acknowledge the
+        // verified earlier save without replacing or binding that local list.
+        sameSource = false;
+      }
+    }
+    if (sameSource) {
+      current = entry;
+      importId = app.getImportId();
+      savedContentId = checkpoint;
+      savedName = entry.name;
+    }
+    lastSavedAt = entry.updatedAt;
+    entries = [entry, ...entries.filter((row) => row.id !== entry.id)];
+    clearPending();
+    status(isDirty() ? 'savedEarlier' : 'saved');
+  }
+  async function reconcileSave() {
+    if (!pending) return 'none';
+    const operation = pending;
+    let loaded;
+    try {
+      loaded = await api.load(operation.id);
+    } catch (error) {
+      if (cloudErrorCode(error) === 'notFound') {
+        // A missing existing revision is a deletion, not permission to recreate it.
+        if (operation.revision !== null || operation.committedRevision) {
+          clearPending();
+          throw new Error('conflict');
+        }
+        return 'retry';
+      }
+      return 'unknown';
+    }
+    if (
+      (await snapshotFingerprint(loaded.validated.snapshot)) ===
+      operation.digest
+    ) {
+      await acceptSave(loaded.entry, operation);
+      return 'saved';
+    }
+    if (loaded.entry.revision === operation.committedRevision) {
+      // This exact revision is known to be our successful PUT, but an older
+      // backend may discard a newly supported field. Never mark it clean.
+      rememberCommitted(loaded.entry, operation);
+      operation.mappingMismatch = true;
+      return 'incompatible';
+    }
+    if (loaded.entry.revision === operation.revision) return 'retry';
+    // Never take a newly observed revision and use it to overwrite another device.
+    operation.conflict = true;
+    throw new Error('conflict');
+  }
+  function reconciliationStatus(result) {
+    return result === 'retry'
+      ? 'retrySave'
+      : result === 'incompatible'
+        ? 'incompatibleCloud'
+        : 'pendingSave';
   }
   function render() {
     doc.querySelectorAll('[data-cloud-text]').forEach((node) => {
@@ -264,7 +536,8 @@ export function startCloud(
     $('#cloudSelect').disabled = busy || !entries.length;
     $('#cloudCode').disabled = busy;
     $('#cloudName').disabled = busy;
-    status(statusKey, statusError);
+    status(statusKey, statusError, diagnostic);
+    renderSaveState();
   }
   async function run(action) {
     if (busy) return;
@@ -274,12 +547,25 @@ export function startCloud(
     try {
       await action();
     } catch (error) {
-      status(
-        Object.hasOwn(CLOUD_TEXT.zh, error?.message)
-          ? error.message
-          : 'serverError',
-        true,
-      );
+      const key = [
+        'changed',
+        'nameRequired',
+        'pendingSave',
+        'retrySave',
+        'pendingSourceChanged',
+        'pendingElsewhere',
+        'incompatibleCloud',
+      ].includes(error?.message)
+        ? error.message
+        : cloudErrorCode(error);
+      const label = Object.hasOwn(CLOUD_TEXT.zh, key) ? key : 'serverError';
+      const http =
+        Number.isInteger(error?.status) &&
+        error.status >= 400 &&
+        error.status <= 599
+          ? ` / HTTP ${error.status}`
+          : '';
+      status(label, true, key + http);
     } finally {
       busy = false;
       render();
@@ -294,6 +580,10 @@ export function startCloud(
     entries = lists;
     current = null;
     importId = -1;
+    savedContentId = -1;
+    lastSavedAt = 0;
+    pending = null;
+    pendingKey = 'wordroom-cloud-pending-v1:' + (await fingerprint(code));
     $('#cloudCode').value = code;
     $('#cloudName').value = app.capture().name.slice(0, 200);
     let remembered = false;
@@ -302,6 +592,23 @@ export function startCloud(
       remembered = true;
     } catch {}
     status(remembered ? 'connected' : 'connectedTemporary');
+    try {
+      const stored = JSON.parse(storage.getItem(pendingKey) || 'null');
+      if (validPending(stored))
+        pending = {
+          id: stored.id,
+          revision: stored.revision,
+          digest: stored.digest,
+          ...(stored.committedRevision
+            ? { committedRevision: stored.committedRevision }
+            : {}),
+          durable: true,
+        };
+    } catch {}
+    if (pending) {
+      const result = await reconcileSave();
+      if (result !== 'saved') status(reconciliationStatus(result), true);
+    }
   }
   $('#cloudConnect').addEventListener('click', () =>
     run(() => connect($('#cloudCode').value.trim())),
@@ -334,6 +641,8 @@ export function startCloud(
     code = '';
     current = null;
     entries = [];
+    pending = null;
+    lastSavedAt = 0;
     $('#cloudCode').value = '';
     status(removed ? 'disconnected' : 'disconnectBlocked', !removed);
     render();
@@ -341,27 +650,85 @@ export function startCloud(
   $('#cloudRefresh').addEventListener('click', () =>
     run(async () => {
       entries = await api.list();
-      status('refreshed');
+      if (pending) {
+        const result = await reconcileSave();
+        if (result !== 'saved') status(reconciliationStatus(result), true);
+      } else status('refreshed');
     }),
   );
   $('#cloudSave').addEventListener('click', () =>
     run(async () => {
+      let target = null;
+      const wasRetry = Boolean(pending);
+      if (pending) {
+        const result = await reconcileSave();
+        if (result === 'saved') return;
+        if (!['retry', 'incompatible'].includes(result))
+          throw new Error('pendingSave');
+      }
       const snapshot = app.capture();
       snapshot.name = $('#cloudName').value.trim();
       if (!snapshot.name) throw new Error('nameRequired');
-      const changeId = app.getChangeId(),
-        sourceId = app.getImportId();
-      const target =
+      const sourceId = app.getImportId(),
+        checkpoint = contentId();
+      const digest = await snapshotFingerprint(snapshot);
+      if (pending) {
+        // An imported list must never be substituted into the unresolved PUT
+        // for a previous cloud list. After reload, require exact content proof.
+        if (
+          pending.sourceId == null
+            ? pending.digest !== digest
+            : pending.sourceId !== sourceId
+        )
+          throw new Error('pendingSourceChanged');
+        target = {
+          id: pending.id,
+          revision: pending.committedRevision || pending.revision,
+        };
+      }
+      target ??=
         current && importId === sourceId
           ? current
           : { id: crypto.randomUUID(), revision: null };
-      const entry = await api.save(target.id, snapshot, target.revision);
-      if (app.getImportId() === sourceId) {
-        current = entry;
-        importId = sourceId;
+      const operation = {
+        id: target.id,
+        revision: target.revision,
+        digest,
+        sourceId,
+        contentId: checkpoint,
+      };
+      // Persist BEFORE the request so a reload cannot forget its target ID.
+      storePending(operation);
+      let entry;
+      try {
+        entry = await api.save(target.id, snapshot, target.revision);
+      } catch (error) {
+        if (!uncertainSave(error)) {
+          // A definite failure of a retry does not cancel the older request,
+          // which may still finish. Keep its ID until readback is conclusive.
+          if (!wasRetry) clearPending();
+          throw error;
+        }
+        const result = await reconcileSave();
+        if (result === 'saved') return;
+        // GET verification never retries the PUT automatically.
+        status(reconciliationStatus(result), true, cloudErrorCode(error));
+        return;
       }
-      entries = [entry, ...entries.filter((row) => row.id !== entry.id)];
-      status(changeId === app.getChangeId() ? 'saved' : 'savedEarlier');
+      const sources =
+        snapshot.schemaVersion === 1 ? [snapshot] : snapshot.sources;
+      if (
+        sources.some((source) => Number.isInteger(source.mapping.association))
+      ) {
+        // Older deployed Workers may acknowledge a PUT while stripping the new
+        // mapping. Verify this newly supported field before claiming success.
+        // Remember the known commit even if GET fails, to prevent a new copy.
+        rememberCommitted(entry, operation);
+        operation.committedRevision = entry.revision;
+        storePending(operation);
+        const result = await reconcileSave();
+        if (result !== 'saved') status(reconciliationStatus(result), true);
+      } else await acceptSave(entry, operation);
     }),
   );
   $('#cloudLoad').addEventListener('click', () => {
@@ -374,6 +741,11 @@ export function startCloud(
       app.restore(validated);
       current = entry;
       importId = app.getImportId();
+      savedContentId = contentId();
+      savedName = entry.name;
+      lastSavedAt = entry.updatedAt;
+      // Loading is an explicit replacement confirmed by the user.
+      clearPending();
       $('#cloudName').value = entry.name;
       status('loaded');
     });
@@ -386,12 +758,18 @@ export function startCloud(
       await api.delete(entry);
       entries = entries.filter((row) => row.id !== entry.id);
       if (current?.id === entry.id) current = null;
+      if (pending?.id === entry.id) clearPending();
       status('deleted');
     });
   });
   $('#languageSelect').addEventListener('change', render);
+  $('#cloudName').addEventListener('input', renderSaveState);
+  app.onChange?.((event) => {
+    if (event.cloud) renderSaveState();
+  });
   app.onImport(() => {
     $('#cloudName').value = app.capture().name.slice(0, 200);
+    renderSaveState();
   });
   // Imports are still local. Updating this label never uploads or loads data.
   $('#cloudPanel').addEventListener('toggle', () => {

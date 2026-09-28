@@ -36,7 +36,7 @@ import {
   shuffled as shuffle,
   translate,
 } from '@/wordroom.js';
-import type { Field, Locale, Mapping, Word } from '@/wordroom.js';
+import type { Locale, Mapping, Word } from '@/wordroom.js';
 
 type WordInput = Omit<Word, 'sourceIndex'>;
 
@@ -499,7 +499,7 @@ export default function WordroomClient() {
               ))}
             </div>
             <div className="space-y-3">
-              {(['word', 'meaning', 'example', 'phrase'] as Field[])
+              {(['word', 'meaning', 'example', 'phrase'] as const)
                 .filter((field) => field === 'word' || included[field])
                 .map((field) => (
                   <div

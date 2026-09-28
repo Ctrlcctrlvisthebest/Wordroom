@@ -7,6 +7,7 @@ import { startUI } from '../wordroom-ui.js';
 import { startMusic, trackAtTime } from '../wordroom-music.js';
 import { PLAYLIST } from '../wordroom-playlist.js';
 import { startShortcuts } from '../wordroom-shortcuts.js';
+import { startSession, validateProgress } from '../wordroom-session.js';
 import { newSyncCode, validateSnapshot } from '../cloud-data.js';
 import {
   TRANSLATIONS,
@@ -45,6 +46,7 @@ void test('自动识别可选字段，缺少字段保持为空', () =>
     meaning: 1,
     example: null,
     phrase: null,
+    association: null,
   }));
 void test('自动识别不会把同一列分配给多个字段', () =>
   assert.deepEqual(detectMapping(['word', 'meaning phrase']), {
@@ -52,11 +54,12 @@ void test('自动识别不会把同一列分配给多个字段', () =>
     meaning: 1,
     example: null,
     phrase: null,
+    association: null,
   }));
 void test('自动识别西班牙语 CSV 表头', () =>
   assert.deepEqual(
     detectMapping(['palabra', 'significado', 'ejemplo', 'colocación']),
-    { word: 0, meaning: 1, example: 2, phrase: 3 },
+    { word: 0, meaning: 1, example: 2, phrase: 3, association: null },
   ));
 void test('中英西三语文案支持变量替换和未知语言回退', () => {
   assert.equal(translate('en', 'wordCount', { count: 3 }), '3 words');
@@ -65,6 +68,37 @@ void test('中英西三语文案支持变量替换和未知语言回退', () => 
     'Añadir hola a favoritas',
   );
   assert.equal(translate('unknown', 'field_word'), '单词');
+});
+void test('联想表头支持中英西及助记别名，缺失或未启用时为空', () => {
+  for (const header of [
+    '联想',
+    '联想记忆',
+    'association',
+    'Mnemonic',
+    'asociación',
+    'asociacion',
+    'mnemotecnia',
+  ]) {
+    const mapping = detectMapping(['word', header]);
+    assert.equal(mapping.association, 1);
+    assert.equal(
+      createWords([['hello', '  memory cue  ']], mapping)[0].association,
+      'memory cue',
+    );
+    assert.equal(createWords([['hello']], mapping)[0].association, '');
+    assert.equal(
+      createWords([['hello', 'hidden cue']], {
+        ...mapping,
+        association: null,
+      })[0].association,
+      '',
+    );
+  }
+  assert.equal(detectMapping(['word', 'unrelated']).association, null);
+  assert.equal(
+    detectMapping(['word', 'meaning association']).association,
+    null,
+  );
 });
 void test('三种语言包拥相同的文案键', () => {
   const expected = Object.keys(TRANSLATIONS.zh).sort();
@@ -86,6 +120,7 @@ void test('仅创建有单词的记录，不读取未启用字段', () =>
         meaning: '你好',
         example: '',
         phrase: '',
+        association: '',
       },
       {
         sourceIndex: 2,
@@ -93,6 +128,7 @@ void test('仅创建有单词的记录，不读取未启用字段', () =>
         meaning: '',
         example: '',
         phrase: '',
+        association: '',
       },
     ],
   ));
@@ -352,6 +388,312 @@ function createUI({
   };
 }
 
+function sessionStore(seed = {}) {
+  let saved = structuredClone(seed),
+    count = 0;
+  const writes = [];
+  return {
+    read: async () => structuredClone(saved),
+    write: async (input) => {
+      if ((saved.meta?.revision ?? null) !== input.expectedRevision)
+        throw new Error('conflict');
+      writes.push(structuredClone(input));
+      const revision = `session-${++count}`;
+      saved =
+        input.enabled === false
+          ? { meta: { revision, enabled: false, version: 1 } }
+          : {
+              meta: { revision, enabled: true, version: 1 },
+              library: structuredClone(input.library || saved.library),
+              progress: structuredClone(input.progress),
+            };
+      return revision;
+    },
+    saved: () => structuredClone(saved),
+    writes: () => writes,
+  };
+}
+const sessionOptions = (ui, store) => ({
+  doc: ui.document,
+  win: { addEventListener() {} },
+  store,
+  schedule: () => 0,
+  cancel() {},
+});
+function scope(ui, source = 'all', starredOnly = false) {
+  ui.$('#reviewSource').value = String(source);
+  ui.$('#reviewStarred').checked = starredOnly;
+  ui.$('#reviewSource').listeners.change();
+}
+
+void test('复习范围组合 CSV 与星标，空范围安全且星标取消后不会越界', async () => {
+  const ui = createUI();
+  await ui.uploadFiles([
+    {
+      name: 'a.csv',
+      size: 30,
+      text: async () => 'word,meaning\nalpha,A\nbeta,B',
+    },
+    {
+      name: 'b.csv',
+      size: 30,
+      text: async () => 'word,meaning\ngamma,G\ndelta,D',
+    },
+  ]);
+  scope(ui, 0);
+  const selected = ui.studyApp.captureSession().progress.deck;
+  assert.deepEqual(
+    [...selected].sort((a, b) => a - b),
+    [0, 1],
+  );
+  ui.$('#cardStar').click();
+  const starred = ui.studyApp.capture().starred[0];
+  scope(ui, 'all', true);
+  assert.deepEqual([...ui.studyApp.captureSession().progress.deck], [starred]);
+  ui.$('#drawCount').value = '100';
+  ui.$('#drawBtn').click();
+  assert.deepEqual([...ui.studyApp.captureSession().progress.drawn], [starred]);
+  ui.$('#cardStar').click();
+  assert.equal(ui.$('#next').disabled, true);
+  assert.equal(ui.$('#card').disabled, true);
+  assert.equal(ui.$('#drawBtn').disabled, true);
+  assert.match(ui.$('#card').innerHTML, /这个范围没有单词/);
+  assert.equal(ui.studyApp.captureSession().progress.index, 0);
+  scope(ui, 1);
+  assert.deepEqual(
+    [...ui.studyApp.captureSession().progress.deck].sort((a, b) => a - b),
+    [2, 3],
+  );
+  assert.equal(ui.$('#drawBtn').disabled, false);
+  ui.language('en');
+  assert.match(ui.$('#reviewScopeLabel').textContent, /Review scope/);
+  ui.language('es');
+  assert.match(ui.$('#reviewStarredLabel').textContent, /Solo favoritas/);
+});
+
+void test('切换复习范围保留造句草稿，替换词库重置范围，追加仍保留范围', async () => {
+  const ui = createUI();
+  await ui.upload('word\nalpha\nbeta');
+  const input = ui.document.querySelectorAll('[data-answer]')[0];
+  input.value = 'A saved sentence.';
+  input.listeners.input();
+  const before = plain(ui.studyApp.captureSession().progress.answers);
+  scope(ui, 'all', true);
+  scope(ui, 'all', false);
+  assert.deepEqual(
+    plain(ui.studyApp.captureSession().progress.answers),
+    before,
+  );
+  scope(ui, 0);
+  ui.$('#importMode').value = 'append';
+  await ui.upload('word\ngamma', 'second.csv');
+  assert.equal(ui.studyApp.captureSession().progress.scope.source, 0);
+  assert.equal(ui.studyApp.captureSession().progress.deck.length, 2);
+  ui.$('#importMode').value = 'replace';
+  await ui.upload('word\nnew', 'replacement.csv');
+  assert.deepEqual(plain(ui.studyApp.captureSession().progress.scope), {
+    source: 'all',
+    starredOnly: false,
+  });
+});
+
+void test('本机保存恢复词库、星标、顺序、翻面、范围与造句，不含同步码', async () => {
+  const store = sessionStore();
+  const ui = createUI();
+  const saving = await startSession(ui.studyApp, sessionOptions(ui, store));
+  await ui.upload('word,联想\nalpha,hint A\nbeta,hint B');
+  ui.$('#cardStar').click();
+  const input = ui.document.querySelectorAll('[data-answer]')[0];
+  input.value = '<script>Just text</script>';
+  input.listeners.input();
+  ui.$('#next').click();
+  ui.$('#flip').click();
+  ui.$('#drawTab').click();
+  const expected = plain(ui.studyApp.captureSession());
+  await saving.flush();
+  assert.equal(saving.getStatus(), 'saved');
+  assert(!JSON.stringify(store.saved()).includes('wordroom-cloud-code'));
+  const next = createUI();
+  const restored = await startSession(
+    next.studyApp,
+    sessionOptions(next, store),
+  );
+  assert.equal(restored.getStatus(), 'restored');
+  assert.deepEqual(plain(next.studyApp.captureSession()), expected);
+  assert.equal(next.$('#cardsView').classList.contains('hide'), true);
+  assert.match(next.$('#drawGrid').innerHTML, /&lt;script&gt;/);
+  next.$('#flip').click();
+  await restored.flush();
+  assert.equal(
+    Object.hasOwn(store.writes().at(-1), 'library'),
+    false,
+    'navigation only writes lightweight progress',
+  );
+  assert.equal(ui.$('#localRemember').checked, true);
+  saving.stop();
+  restored.stop();
+});
+
+void test('本机存储失败保留练习并可重试，多页并发不覆盖较新进度', async () => {
+  const store = sessionStore();
+  const first = createUI(),
+    second = createUI();
+  const a = await startSession(first.studyApp, sessionOptions(first, store));
+  const b = await startSession(second.studyApp, sessionOptions(second, store));
+  await first.upload('word\nfirst');
+  await a.flush();
+  await second.upload('word\nsecond');
+  await b.flush();
+  assert.equal(b.getStatus(), 'conflict');
+  assert.equal(store.saved().library.rows[0][0], 'first');
+  assert.match(second.$('#card').innerHTML, /second/);
+  const faulty = {
+    ...sessionStore(),
+    write: async () => {
+      throw new Error('QuotaExceededError');
+    },
+  };
+  const third = createUI();
+  const c = await startSession(third.studyApp, sessionOptions(third, faulty));
+  await third.upload('word\nkeep');
+  await c.flush();
+  assert.equal(c.getStatus(), 'failed');
+  assert.match(third.$('#card').innerHTML, /keep/);
+  faulty.write = sessionStore().write;
+  await third.$('#localRetry').click();
+  assert.equal(c.getStatus(), 'saved');
+  a.stop();
+  b.stop();
+  c.stop();
+});
+
+void test('抽词数量编辑中的空值与越界值不会生成无法恢复的本机进度', async () => {
+  const ui = createUI(),
+    store = sessionStore();
+  const saver = await startSession(ui.studyApp, sessionOptions(ui, store));
+  await ui.upload('word\nalpha\nbeta');
+  for (const value of ['', '-5', '999999', '1.5']) {
+    ui.$('#drawCount').value = value;
+    ui.$('#flip').click();
+    await saver.flush();
+    assert.equal(saver.getStatus(), 'saved');
+    const saved = store.saved();
+    assert.doesNotThrow(() =>
+      validateProgress(saved.progress, validateSnapshot(saved.library)),
+    );
+    assert(saved.progress.drawCount >= 1 && saved.progress.drawCount <= 2);
+  }
+  const next = createUI();
+  const restored = await startSession(
+    next.studyApp,
+    sessionOptions(next, store),
+  );
+  assert.equal(restored.getStatus(), 'restored');
+  saver.stop();
+  restored.stop();
+});
+
+void test('启动读取尚未完成时翻动示例卡片不会覆盖已保存的个人词库', async () => {
+  const previous = createUI();
+  await previous.upload('word\npersonal');
+  const seed = plain(previous.studyApp.captureSession());
+  const store = sessionStore({
+    meta: { version: 1, revision: 'old', enabled: true },
+    ...seed,
+  });
+  const read = store.read;
+  let release;
+  store.read = () =>
+    new Promise((resolve) => {
+      release = () => resolve(read());
+    });
+  const ui = createUI();
+  const pending = startSession(ui.studyApp, sessionOptions(ui, store));
+  ui.$('#flip').click();
+  release();
+  const saver = await pending;
+  await saver.flush();
+  assert.equal(saver.getStatus(), 'restoreSkipped');
+  assert.equal(store.writes().length, 0);
+  assert.deepEqual(plain(store.saved().library), seed.library);
+  saver.stop();
+});
+
+void test('关闭本机记忆仅清除本机副本，重开浏览器不自动恢复', async () => {
+  const ui = createUI(),
+    store = sessionStore();
+  const saver = await startSession(ui.studyApp, sessionOptions(ui, store));
+  await ui.upload('word\nkeep-live');
+  await saver.flush();
+  ui.$('#localRemember').checked = false;
+  await ui.$('#localRemember').listeners.change();
+  assert.equal(saver.getStatus(), 'disabled');
+  assert.equal(store.saved().library, undefined);
+  assert.match(ui.$('#card').innerHTML, /keep-live/);
+  const next = createUI();
+  const loaded = await startSession(next.studyApp, sessionOptions(next, store));
+  assert.equal(loaded.getStatus(), 'disabled');
+  assert.equal(next.$('#localRemember').checked, false);
+  ui.$('#localRemember').checked = true;
+  await ui.$('#localRemember').listeners.change();
+  assert.equal(store.saved().library.rows[0][0], 'keep-live');
+  saver.stop();
+  loaded.stop();
+});
+
+void test('损坏进度不替换词库且不自动覆盖，恢复期间的新导入优先', async () => {
+  const seedUI = createUI();
+  const seed = plain(seedUI.studyApp.captureSession());
+  const validated = validateSnapshot(seed.library);
+  assert.throws(() =>
+    validateProgress({ ...seed.progress, deck: [999] }, validated),
+  );
+  assert.throws(() =>
+    validateProgress({ ...seed.progress, answers: [[999, 'bad']] }, validated),
+  );
+  assert.throws(() =>
+    validateProgress(
+      { ...seed.progress, scope: { source: -1, starredOnly: false } },
+      validated,
+    ),
+  );
+  const badStore = sessionStore({
+    meta: { version: 1, revision: 'old', enabled: true },
+    library: seed.library,
+    progress: { ...seed.progress, deck: [999] },
+  });
+  const bad = createUI();
+  const blocked = await startSession(
+    bad.studyApp,
+    sessionOptions(bad, badStore),
+  );
+  bad.$('#next').click();
+  await blocked.flush();
+  assert.equal(blocked.getStatus(), 'invalid');
+  assert.equal(badStore.writes().length, 0);
+  let release;
+  const delayed = sessionStore({
+    meta: { version: 1, revision: 'old', enabled: true },
+    ...seed,
+  });
+  const read = delayed.read;
+  delayed.read = () =>
+    new Promise((done) => {
+      release = () => done(read());
+    });
+  const ui = createUI();
+  const pending = startSession(ui.studyApp, sessionOptions(ui, delayed));
+  await ui.upload('word\nnewer');
+  release();
+  const saver = await pending;
+  assert.match(ui.$('#card').innerHTML, /newer/);
+  await saver.flush();
+  assert.equal(saver.getStatus(), 'restoreSkipped');
+  assert.deepEqual(plain(delayed.saved().library), seed.library);
+  blocked.stop();
+  saver.stop();
+});
+
 function pressKey(ui, key, options = {}) {
   let prevented = false;
   ui.document.listeners.keydown({
@@ -364,6 +706,117 @@ function pressKey(ui, key, options = {}) {
   });
   return prevented;
 }
+
+void test('联想可选列在卡背安全显示，取消隐藏且保留星标、造句和原始导出', async () => {
+  const ui = createUI();
+  const cue = ' <img src=x onerror=alert(1)> "rain",\n彩虹 ';
+  const csv = serializeCSV([
+    ['word', '联想'],
+    ['rainbow', cue],
+  ]);
+  await ui.upload(csv);
+  const checkbox = ui.$('[data-include="association"]');
+  assert.equal(checkbox.checked, true);
+  assert(ui.document.querySelector('#map-association'));
+  assert.equal(plain(ui.studyApp.capture()).mapping.association, 1);
+  assert.doesNotMatch(ui.$('#card').innerHTML, /彩虹/);
+  ui.$('#flip').click();
+  assert.match(ui.$('#card').innerHTML, /<b>联想<\/b>/);
+  assert.match(ui.$('#card').innerHTML, /&lt;img/);
+  assert.doesNotMatch(ui.$('#card').innerHTML, /<img/);
+  ui.$('#cardStar').click();
+  const draft = ui.document.querySelectorAll('[data-answer]')[0];
+  draft.value = 'I saw a rainbow.';
+  draft.listeners.input({ target: draft });
+  checkbox.checked = false;
+  checkbox.listeners.change({ target: checkbox });
+  assert.equal(ui.document.querySelector('#map-association'), null);
+  assert.match(ui.$('#card').innerHTML, /这个词没有附加内容/);
+  assert.equal(ui.$('#cardStar').attrs['aria-pressed'], 'true');
+  assert.equal(ui.document.querySelectorAll('[data-answer]')[0], draft);
+  assert.equal(draft.value, 'I saw a rainbow.');
+  ui.$('#exportBtn').click();
+  assert.equal(await ui.blobs[0].text(), csv);
+  checkbox.checked = true;
+  checkbox.listeners.change({ target: checkbox });
+  assert.match(ui.$('#card').innerHTML, /彩虹/);
+  for (const [locale, label] of [
+    ['en', 'Association'],
+    ['es', 'Asociación'],
+    ['zh', '联想'],
+  ]) {
+    ui.language(locale);
+    assert.equal(ui.$('[data-field-label="association"]').textContent, label);
+    assert.match(ui.$('#card').innerHTML, new RegExp(`<b>${label}</b>`));
+    assert.match(ui.$('#drawGrid').innerHTML, /I saw a rainbow\./);
+  }
+  ui.$('#drawTab').click();
+  assert.doesNotMatch(ui.$('#drawGrid').innerHTML, /彩虹|&lt;img/);
+});
+
+void test('联想没有可用列、空值和重复列映射均不会破坏词库', async () => {
+  const ui = createUI();
+  await ui.upload('word\nhello');
+  const checkbox = ui.$('[data-include="association"]');
+  assert.equal(checkbox.checked, false);
+  checkbox.checked = true;
+  checkbox.listeners.change({ target: checkbox });
+  assert.equal(checkbox.checked, false);
+  assert.match(ui.$('#message').textContent, /没有剩余/);
+  await ui.upload('word,meaning,association,extra\nhello,你好,,自选联想');
+  ui.$('#flip').click();
+  assert.doesNotMatch(ui.$('#card').innerHTML, /<b>联想<\/b>/);
+  for (const column of ['0', '1', '-1', '100']) {
+    const select = ui.$('#map-association');
+    select.value = column;
+    select.listeners.change({ target: select });
+    assert.equal(plain(ui.studyApp.capture()).mapping.association, 2);
+  }
+  const select = ui.$('#map-association');
+  select.value = '3';
+  select.listeners.change({ target: select });
+  assert.match(ui.$('#card').innerHTML, /自选联想/);
+});
+
+void test('多个 CSV 的联想各自映射并通过云端快照恢复，旧词表仍可打开', async () => {
+  const ui = createUI();
+  await ui.uploadFiles([
+    csvFile('a.csv', 'word,联想\na,first cue'),
+    csvFile('b.csv', 'asociación,palabra\nsecond cue,b'),
+  ]);
+  assert.deepEqual(
+    validateSnapshot(plain(ui.studyApp.capture())).words.map(
+      (word) => word.association,
+    ),
+    ['first cue', 'second cue'],
+  );
+  selectSource(ui, 0);
+  const checkbox = ui.$('[data-include="association"]');
+  checkbox.checked = false;
+  checkbox.listeners.change({ target: checkbox });
+  const saved = plain(ui.studyApp.capture());
+  const other = createUI();
+  other.studyApp.restore(validateSnapshot(saved));
+  assert.deepEqual(plain(other.studyApp.capture()), saved);
+  assert.equal(other.$('[data-include="association"]').checked, false);
+  selectSource(other, 1);
+  assert.equal(other.$('[data-include="association"]').checked, true);
+  assert.deepEqual(
+    validateSnapshot(saved).words.map((word) => word.association),
+    ['', 'second cue'],
+  );
+  const legacy = {
+    schemaVersion: 1,
+    name: 'legacy.csv',
+    headers: ['word'],
+    rows: [['old']],
+    mapping: { word: 0, meaning: null, example: null, phrase: null },
+    starred: [],
+  };
+  other.studyApp.restore(validateSnapshot(legacy));
+  assert.equal(other.$('[data-include="association"]').checked, false);
+  assert.deepEqual(plain(other.studyApp.capture()), legacy);
+});
 
 void test('方向键切换单词、空格翻面，长按和首尾不会越界或连续翻面', async () => {
   const ui = createUI();
@@ -1684,6 +2137,7 @@ void test('云端读取期间本地修改不被覆盖，失败保存不清空当
   await pending;
   assert.match(ui.$('#card').innerHTML, /latest/);
   assert.match(ui.$('#cloudStatus').textContent, /发生了变化/);
+  ui.api.load = originalLoad;
   ui.api.save = async () => {
     throw new Error('offline');
   };
@@ -1692,7 +2146,7 @@ void test('云端读取期间本地修改不被覆盖，失败保存不清空当
   assert.match(ui.$('#card').innerHTML, /latest/);
   assert.equal(ui.$('#cardStar').attrs['aria-pressed'], 'true');
   assert.equal(ui.$('#cloudSave').disabled, false);
-  assert.match(ui.$('#cloudStatus').textContent, /暂时无法/);
+  assert.match(ui.$('#cloudStatus').textContent, /保存结果尚未确认/);
 });
 
 void test('取消云端切换和删除不会发请求，退出只移除设备同步码', async () => {
@@ -1739,6 +2193,9 @@ void test('保存中导入新词表不会错绑旧云端副本', async () => {
   };
   const pending = ui.$('#cloudSave').click();
   await ui.upload('word\nnew-list', 'new-list.csv');
+  for (let attempts = 0; !release && attempts < 100; attempts++)
+    await new Promise((done) => setImmediate(done));
+  assert(release, 'the save request should start');
   release();
   await pending;
   assert.match(ui.$('#cloudStatus').textContent, /又有更改/);

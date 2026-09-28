@@ -215,6 +215,54 @@ void test('多来源快照拒绝异常文件、坏映射、空词表、错误星
   );
 });
 
+void test('联想在单词表与合并词库中跨设备完整保存，未勾选和旧快照保持原样', async () => {
+  const a = client();
+  for (const enabled of [true, false]) {
+    const one = snapshot();
+    one.headers[2] = '联想';
+    one.mapping.association = enabled ? 2 : null;
+    const multi = multiSnapshot();
+    multi.sources[0] = {
+      name: one.name,
+      headers: one.headers,
+      rows: one.rows,
+      mapping: one.mapping,
+    };
+    for (const value of [one, multi]) {
+      const id = crypto.randomUUID();
+      const entry = await a.save(id, value);
+      const restored = await a.load(id);
+      assert.deepEqual(restored.validated.snapshot, value);
+      assert.equal(
+        restored.validated.words[0].association,
+        enabled ? '"raw",' : '',
+      );
+      const updated = await a.save(id, snapshot(), entry.revision);
+      assert.deepEqual((await a.load(id)).validated.snapshot, snapshot());
+      await a.delete(updated);
+    }
+  }
+});
+
+void test('云端拒绝无效或与其他字段重叠的联想映射，旧字段仍严格校验', async () => {
+  const code = newSyncCode();
+  for (const association of ['2', -1, 0, 1, 3, {}, false]) {
+    const value = snapshot();
+    value.mapping.association = association;
+    assert.throws(() => validateSnapshot(value), /invalidSnapshot/);
+    const result = await request(code, '/' + crypto.randomUUID(), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'If-None-Match': '*' },
+      body: JSON.stringify(value),
+    });
+    assert.equal(result.status, 400);
+  }
+  const missingMeaning = snapshot();
+  delete missingMeaning.mapping.meaning;
+  assert.throws(() => validateSnapshot(missingMeaning), /invalidSnapshot/);
+  assert.deepEqual(await client(code).list(), []);
+});
+
 void test('鉴权、CORS、非缓存响应和协议限制', async () => {
   assert.equal((await request('bad')).status, 401);
   const rejected = await request(newSyncCode(), '', {

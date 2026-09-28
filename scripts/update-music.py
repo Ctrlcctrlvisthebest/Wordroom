@@ -5,6 +5,7 @@ Originals are read-only. Cached normalization is keyed by content and recipe.
 Website references are updated only after the new continuous mix passes checks.
 This command never commits, pushes, deploys, or deletes old audio versions.
 """
+import argparse
 import concurrent.futures
 import hashlib
 import json
@@ -23,6 +24,9 @@ AUDIO = ROOT / 'audio'
 CACHE = ROOT / 'work/music-cache'
 RATE, FADE = 32000, 3
 RECIPE = 'pcm-loudnorm-22-tp4-trim48-qsin3-v1'
+DEFAULT_BITRATE = 112
+SUPPORTED_BITRATES = (96, 112, 160)
+ENCODING_RECIPE = 'aac-lc-faststart-v2'
 EXTENSIONS = {'.m4a', '.mp3', '.wav', '.ogg', '.opus', '.flac', '.aac'}
 
 
@@ -146,12 +150,33 @@ def prepare(ffmpeg, track):
     return dict(data, pcm=str(target), sourceHash=source_hash)
 
 
-def build(ffmpeg, tracks, prepared):
-    fingerprint = digest((RECIPE + ''.join(track['sourceHash'] for track in prepared)).encode())[:12]
+def mix_fingerprint(prepared, bitrate):
+    if bitrate not in SUPPORTED_BITRATES:
+        raise ValueError('Unsupported bitrate; choose 96, 112 or 160 kbps.')
+    # Delivery settings must be part of the key: changing quality must never
+    # reuse or replace a file referenced by an older published page.
+    recipe = f'{RECIPE}:{ENCODING_RECIPE}:{RATE}:{FADE}:{bitrate}:'
+    return digest((recipe + ''.join(track['sourceHash'] for track in prepared)).encode())[:12]
+
+
+def publish_immutable(partial, output, expected_hash):
+    """Publish an audio version without ever overwriting an existing one."""
+    try:
+        # Both files are inside this project. Linking is atomic and fails if
+        # another process has already created the destination.
+        os.link(partial, output)
+    except FileExistsError:
+        if digest(output.read_bytes()) != expected_hash:
+            raise ValueError('Refusing to overwrite an existing audio version: ' + output.name)
+    partial.unlink()
+
+
+def build(ffmpeg, tracks, prepared, bitrate=DEFAULT_BITRATE):
+    fingerprint = mix_fingerprint(prepared, bitrate)
     output = AUDIO / f'study-continuous-{fingerprint}.m4a'
     total_frames = sum(track['frames'] for track in prepared) - len(tracks) * FADE * RATE
     duration = total_frames / RATE
-    if duration * 21000 >= 95_000_000:
+    if duration * (bitrate * 1000 / 8) * 1.05 >= 95_000_000:
         raise ValueError('Mix would approach GitHub file limits; split the playlist or use audio hosting.')
     mix_report = CACHE / (fingerprint + '-mix.json')
     if output.exists() and mix_report.exists():
@@ -175,7 +200,7 @@ def build(ffmpeg, tracks, prepared):
         partial = CACHE / (fingerprint + '.partial.m4a')
         print(f'Rendering {len(tracks)} tracks with {FADE}s circular crossfades…', flush=True)
         run(ffmpeg, args + ['-filter_complex', ';'.join(graph), '-map', '[out]',
-                           '-ar', str(RATE), '-ac', '2', '-c:a', 'aac', '-b:a', '160k',
+                           '-ar', str(RATE), '-ac', '2', '-c:a', 'aac', '-b:a', f'{bitrate}k',
                            '-map_metadata', '-1', '-movflags', '+faststart', str(partial)])
         stats = loudness(run(ffmpeg, ['-i', str(partial), '-af',
                          'loudnorm=I=-22:TP=-1:LRA=20:print_format=json', '-f', 'null', '-']))
@@ -184,8 +209,10 @@ def build(ffmpeg, tracks, prepared):
         if partial.stat().st_size >= 95_000_000:
             raise ValueError('Final mix exceeds the safe GitHub file-size limit.')
         report = dict(duration=duration, tracks=len(tracks), loudness=stats['input_i'],
-                      truePeak=stats['input_tp'], sha256=digest(partial.read_bytes()))
-        partial.replace(output)
+                      truePeak=stats['input_tp'], sha256=digest(partial.read_bytes()),
+                      bitrateKbps=bitrate, bytes=partial.stat().st_size,
+                      sampleRate=RATE, encodingRecipe=ENCODING_RECIPE)
+        publish_immutable(partial, output, report['sha256'])
         write_changed(mix_report, json.dumps(report, indent=2) + '\n')
     chapters, cursor = [], 0
     for track, data in zip(tracks, prepared):
@@ -195,6 +222,8 @@ def build(ffmpeg, tracks, prepared):
                              cue=round(start + (FADE if cursor else 0), 5)))
         cursor += data['frames'] - FADE * RATE
     return dict(src='./audio/' + output.name, duration=round(duration, 5), crossfade=FADE,
+                delivery=dict(codec='aac', bitrateKbps=bitrate, sampleRate=RATE,
+                              bytes=output.stat().st_size, sha256=report['sha256']),
                 loopSwitchAt=round(duration - FADE / 2, 5), tracks=chapters), report
 
 
@@ -206,6 +235,11 @@ def replace_one(pattern, replacement, text):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--bitrate', type=int, choices=SUPPORTED_BITRATES,
+                        default=DEFAULT_BITRATE,
+                        help='AAC delivery bitrate in kbps (default: 112; 160 restores the prior quality setting).')
+    args = parser.parse_args()
     ffmpeg = os.environ.get('FFMPEG_BIN') or shutil.which('ffmpeg')
     if not ffmpeg:
         bundled = ROOT / 'work/music-tools/ffmpeg'
@@ -235,7 +269,7 @@ def main():
         for track, data in zip(tracks, prepared):
             if digest((AUDIO / track['original']).read_bytes()) != data['sourceHash']:
                 raise ValueError('Audio changed during processing; finish copying it and retry: ' + track['original'])
-        playlist, report = build(ffmpeg, tracks, prepared)
+        playlist, report = build(ffmpeg, tracks, prepared, args.bitrate)
         catalog = json.dumps(tracks, ensure_ascii=False, indent=2) + '\n'
         manifest = '// Generated by npm run music:update. Edit audio/tracks.json for names/order.\n'
         manifest += 'export const PLAYLIST = ' + json.dumps(playlist, ensure_ascii=False, indent=2) + ';\n'

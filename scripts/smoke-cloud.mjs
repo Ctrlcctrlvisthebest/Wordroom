@@ -40,6 +40,29 @@ try {
   );
   await assert.rejects(first.save(id, snapshot, original.revision), /conflict/);
   assert.deepEqual((await first.load(id)).validated.snapshot.starred, [10]);
+  const associationSnapshot = {
+    schemaVersion: 1,
+    name: 'Synthetic association.csv',
+    headers: ['word', 'meaning', '联想'],
+    rows: [['resilient', '有韧性的', 'Imagine a spring bouncing back.']],
+    mapping: {
+      word: 0,
+      meaning: 1,
+      example: null,
+      phrase: null,
+      association: 2,
+    },
+    starred: [0],
+  };
+  const associated = await first.save(
+    id,
+    associationSnapshot,
+    changed.revision,
+  );
+  assert.deepEqual(
+    (await second.load(id)).validated.snapshot,
+    associationSnapshot,
+  );
   const combined = {
     schemaVersion: 2,
     name: 'Synthetic combined library',
@@ -55,14 +78,22 @@ try {
       },
       {
         name: 'two.csv',
-        headers: ['ejemplo', 'palabra', 'unused'],
-        rows: [['Line one\nLine two', 'same', 'raw']],
-        mapping: { word: 1, meaning: null, example: 0, phrase: null },
+        headers: ['ejemplo', 'palabra', 'unused', 'asociación'],
+        rows: [
+          ['Line one\nLine two', 'same', 'raw', 'A synthetic memory cue.'],
+        ],
+        mapping: {
+          word: 1,
+          meaning: null,
+          example: 0,
+          phrase: null,
+          association: 3,
+        },
       },
     ],
     starred: [2],
   };
-  const merged = await first.save(id, combined, changed.revision);
+  const merged = await first.save(id, combined, associated.revision);
   const restored = (await second.load(id)).validated;
   assert.deepEqual(restored.snapshot, combined);
   assert.equal(merged.wordCount, 2);
@@ -79,6 +110,8 @@ try {
       bytes: original.bytes,
       roundTrip: true,
       multiCSVRoundTrip: true,
+      associationRoundTrip: true,
+      legacySnapshotCompatible: true,
       isolation: true,
       conflictProtection: true,
       deletion: true,

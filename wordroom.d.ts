@@ -4,9 +4,12 @@ export type Word = {
   meaning?: string;
   example?: string;
   phrase?: string;
+  association?: string;
 };
 export type Field = Exclude<keyof Word, 'sourceIndex'>;
-export type Mapping = Record<Field, number | null>;
+export type Mapping = Record<Exclude<Field, 'association'>, number | null> & {
+  association?: number | null;
+};
 export type Locale = 'zh' | 'en' | 'es';
 
 export const FIELDS: Field[];
@@ -38,3 +41,9 @@ export function createStarredCSV(
 export function shuffled<T>(items: readonly T[], random?: () => number): T[];
 export function clampCount(value: unknown, total: number): number;
 export function escapeHTML(value: unknown): string;
+export function filterReviewWords(
+  words: Word[],
+  sources: { rows: unknown[][] }[],
+  starred: Set<number>,
+  scope: { source: 'all' | number; starredOnly: boolean },
+): Word[];
